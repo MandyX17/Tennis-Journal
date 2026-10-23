@@ -1,0 +1,68 @@
+/* ===== 🦀 密码门 ===== */
+.lockscreen{
+  position:fixed;
+  inset:0;
+  z-index:9999;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(127,160,94,.12), transparent 60%),
+    var(--bg);
+}
+html.unlocked .lockscreen{display:none;}
+html:not(.unlocked) body{overflow:hidden;}
+
+.lock-card{
+  width:100%;
+  max-width:340px;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:22px;
+  padding:30px 24px 24px;
+  box-shadow:var(--shadow);
+  text-align:center;
+}
+.lock-icon{font-size:46px;line-height:1;}
+.lock-card h2{font-size:19px;font-weight:600;margin:12px 0 4px;color:var(--text);letter-spacing:.5px;}
+.lock-sub{font-size:13px;color:var(--muted);margin-bottom:20px;}
+
+.lock-pass{
+  width:100%;
+  height:50px;
+  border-radius:13px;
+  border:1px solid var(--line-strong);
+  background:var(--bg-deep);
+  color:var(--text);
+  text-align:center;
+  font-size:17px;
+  letter-spacing:2px;
+  outline:none;
+  transition:border-color .18s;
+}
+.lock-pass::placeholder{letter-spacing:0;color:var(--dim);}
+.lock-pass:focus{border-color:var(--green);}
+
+.lock-btn{
+  width:100%;
+  height:50px;
+  margin-top:14px;
+  border-radius:13px;
+  background:var(--green);
+  color:#1c2a17;
+  font-size:16px;
+  font-weight:700;
+  letter-spacing:1px;
+  transition:transform .12s, opacity .12s;
+}
+.lock-btn:active{transform:scale(.98);}
+.lock-btn:disabled{opacity:.6;}
+
+.lock-err{
+  min-height:18px;
+  margin-top:10px;
+  font-size:12.5px;
+  line-height:1.5;
+  color:var(--danger);
+}
