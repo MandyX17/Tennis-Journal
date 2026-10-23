@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+<meta name="theme-color" content="#2E3A2A" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="🦀的网球手账" />
+<meta name="format-detection" content="telephone=no" />
+<title>🦀的网球手账</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png" />
+<link rel="icon" type="image/png" href="icons/favicon.png" />
+<link rel="stylesheet" href="css/style.css" />
+<link rel="stylesheet" href="css/lock.css" />
+<script>try{if(Number(localStorage.getItem('crab_unlock_until')||0)>Date.now())document.documentElement.classList.add('unlocked');}catch(e){}</script>
+</head>
+<body>
+<div id="lockScreen" class="lockscreen">
+  <div class="lock-card">
+    <div class="lock-icon">🦀</div>
+    <h2>🦀的网球手账</h2>
+    <p class="lock-sub">请输入密码进入</p>
+    <input id="lockPass" class="lock-pass" type="password" inputmode="text" autocomplete="current-password" placeholder="密码" />
+    <button id="lockBtn" class="lock-btn">进入</button>
+    <p id="lockErr" class="lock-err"></p>
+  </div>
+</div>
+<div id="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-crab">🦀</span>
+      <h1 id="appName">的网球手账</h1>
+    </div>
+    <button class="icon-btn" id="btnSettings" aria-label="设置">⚙</button>
+  </header>
+
+  <section id="statGrid" class="stat-grid" aria-label="统计总览"></section>
+
+  <main id="views" class="views">
+
+    <section class="view is-active" data-view="expense">
+      <div class="view-head">
+        <div class="view-title">
+          <h2>记账</h2>
+          <p class="sub" id="expenseMeta">—</p>
+        </div>
+        <button class="btn-primary" data-act="add-expense">＋ 新增</button>
+      </div>
+      <div id="expenseList" class="list"></div>
+    </section>
+
+    <section class="view" data-view="learn">
+      <div class="view-head">
+        <div class="view-title">
+          <h2>学习记录</h2>
+          <p class="sub" id="learnMeta">—</p>
+        </div>
+        <button class="btn-primary" data-act="add-lesson">＋ 记一次</button>
+      </div>
+
+      <div class="card calendar-card">
+        <div class="card-head">
+          <span>训练日历 <b id="calYear">2026</b></span>
+          <button class="link-btn" id="calToggle">收起</button>
+        </div>
+        <div id="calendar" class="calendar"></div>
+        <div class="cal-legend">
+          <span>少</span>
+          <i class="lv0"></i><i class="lv1"></i><i class="lv2"></i><i class="lv3"></i>
+          <span>多</span>
+        </div>
+      </div>
+
+      <div id="lessonList" class="list"></div>
+    </section>
+
+    <section class="view" data-view="venues">
+      <div class="view-head">
+        <div class="view-title">
+          <h2>球场档案</h2>
+          <p class="sub" id="venueMeta">—</p>
+        </div>
+        <button class="btn-primary" data-act="add-venue">＋ 新增</button>
+      </div>
+      <div id="venueList" class="list"></div>
+    </section>
+
+    <section class="view" data-view="report">
+      <div class="view-head">
+        <div class="view-title">
+          <h2>报告</h2>
+          <p class="sub">自动汇总 · 实时更新</p>
+        </div>
+        <button class="btn-ghost" data-act="open-settings">备份</button>
+      </div>
+      <div id="reportBody" class="report"></div>
+    </section>
+
+  </main>
+
+  <nav class="tabbar" id="tabbar">
+    <button class="tab is-active" data-tab="expense"><span>💰</span><em>记账</em></button>
+    <button class="tab" data-tab="learn"><span>🎾</span><em>学习</em></button>
+    <button class="tab" data-tab="venues"><span>📍</span><em>档案</em></button>
+    <button class="tab" data-tab="report"><span>📊</span><em>报告</em></button>
+  </nav>
+</div>
+
+<div class="sheet-backdrop" id="sheetBackdrop"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true">
+  <div class="sheet-grab"></div>
+  <div class="sheet-head">
+    <h3 id="sheetTitle">标题</h3>
+    <button class="icon-btn" id="sheetClose" aria-label="关闭">✕</button>
+  </div>
+  <div class="sheet-body" id="sheetBody"></div>
+</div>
+
+<div class="modal" id="mediaModal">
+  <button class="modal-close" id="mediaClose">✕</button>
+  <div class="modal-inner" id="mediaInner"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/data.js"></script>
+<script src="js/zip.js"></script>
+<script src="js/app.js"></script>
+<script src="js/lock.js"></script>
+</body>
+</html>
