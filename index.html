@@ -42,7 +42,7 @@
 
   <main id="views" class="views">
 
-    <section class="view is-active" data-view="expense">
+    <section class="view" data-view="expense">
       <div class="view-head">
         <div class="view-title">
           <h2>记账</h2>
@@ -53,7 +53,7 @@
       <div id="expenseList" class="list"></div>
     </section>
 
-    <section class="view" data-view="learn">
+    <section class="view is-active" data-view="learn">
       <div class="view-head">
         <div class="view-title">
           <h2>学习记录</h2>
@@ -69,10 +69,28 @@
         </div>
         <div id="calendar" class="calendar"></div>
         <div class="cal-legend">
-          <span>少</span>
-          <i class="lv0"></i><i class="lv1"></i><i class="lv2"></i><i class="lv3"></i>
-          <span>多</span>
+          <span class="lg-chip lg-class"></span>上课
+          <span class="lg-chip lg-partner"></span>陪练
+          <span class="lg-chip lg-machine"></span>发球机
+          <span class="lg-chip lg-sparring"></span>球搭子
+          <span class="lg-txt">· 超 1h 显示时长</span>
         </div>
+      </div>
+
+      <div class="card remind-card">
+        <div class="card-head"><span>📅 上课提醒 <small style="opacity:.6;font-weight:400">未来 7 天</small></span>
+          <button class="link-btn" data-act="add-reminder">＋ 添加</button></div>
+        <div id="reminderList" class="remind-list"></div>
+      </div>
+
+      <div class="card techstat-card">
+        <div class="card-head"><span>💡 Tips 汇总 / 易错点</span></div>
+        <div id="techStat" class="techstat"></div>
+      </div>
+
+      <div class="card flag-card">
+        <div class="flag-label">📌 我的备忘 / Flag</div>
+        <textarea class="input flag-input" id="learnNote" placeholder="记一句给自己：这周重点练反手、记得带护腕…（自动保存）" rows="2"></textarea>
       </div>
 
       <div id="lessonList" class="list"></div>
@@ -103,9 +121,9 @@
   </main>
 
   <nav class="tabbar" id="tabbar">
-    <button class="tab is-active" data-tab="expense"><span>💰</span><em>记账</em></button>
-    <button class="tab" data-tab="learn"><span>🎾</span><em>学习</em></button>
+    <button class="tab is-active" data-tab="learn"><span>🎾</span><em>学习</em></button>
     <button class="tab" data-tab="venues"><span>📍</span><em>档案</em></button>
+    <button class="tab" data-tab="expense"><span>💰</span><em>记账</em></button>
     <button class="tab" data-tab="report"><span>📊</span><em>报告</em></button>
   </nav>
 </div>
