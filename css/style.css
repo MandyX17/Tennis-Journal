@@ -659,3 +659,134 @@ textarea.input{min-height:74px;resize:vertical;line-height:1.55;}
   .stat-card.tech .v{font-size:30px;}
   .calendar{grid-template-columns:repeat(auto-fill,minmax(84px,1fr));}
 }
+
+/* ===== A/K：设置齿轮去掉半透明圆圈，保留齿轮本身 ===== */
+#btnSettings{background:transparent;border-color:transparent;}
+#btnSettings:active{background:rgba(242,237,225,.08);}
+
+/* ===== B/C：统计卡可点筛选 + 选中态 + 筛选条 ===== */
+.stat-card[data-act]{cursor:pointer;}
+.stat-card.on{
+  border-color:var(--green-bright);
+  box-shadow:0 0 0 1px var(--green-bright), 0 6px 18px rgba(127,160,94,.28);
+}
+.filter-bar{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:10px 14px 2px;
+}
+.filter-tag{font-size:12.5px;color:var(--green-bright);font-weight:600;}
+.filter-bar .link-btn{font-size:12.5px;}
+
+/* ===== F：上课提醒卡 ===== */
+.flag-card{padding:12px 14px;}
+.flag-label{font-size:12.5px;color:var(--muted);margin-bottom:7px;}
+.flag-input{font-size:13.5px;line-height:1.5;}
+.remind-card{padding:12px 14px;}
+.remind-list{display:flex;flex-direction:column;gap:8px;margin-top:4px;}
+.remind-item{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 11px;border-radius:10px;
+  background:rgba(242,237,225,.05);border:1px solid var(--line);
+}
+.ri-main{flex:1;min-width:0;}
+.ri-date{font-size:13.5px;font-weight:650;color:var(--text);font-variant-numeric:tabular-nums;}
+.ri-date b{color:var(--green-bright);font-weight:700;margin-left:4px;}
+.ri-meta{font-size:11.5px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ri-del{
+  flex:none;width:30px;height:30px;border-radius:8px;font-size:14px;color:var(--dim);
+  background:rgba(242,237,225,.05);border:1px solid var(--line);
+}
+.ri-del:active{color:var(--danger);}
+
+/* ===== H：技术动作专项统计 ===== */
+.techstat{display:flex;flex-direction:column;gap:6px;padding:4px 0;}
+.techstat-row{
+  display:flex;align-items:center;gap:9px;
+  padding:7px 9px;border-radius:9px;background:rgba(242,237,225,.045);
+}
+.techstar{
+  flex:none;width:26px;height:26px;border-radius:7px;font-size:14px;
+  color:var(--dim);background:rgba(242,237,225,.06);border:1px solid var(--line);
+}
+.techstar.on{color:#FFD66B;background:rgba(255,214,107,.14);border-color:rgba(255,214,107,.34);}
+.techstat-name{flex:1;min-width:0;font-size:13.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.techstat-cnt{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;}
+
+/* ===== J：日历按类型上色（上课/陪练/自练） ===== */
+.cal-grid span{display:flex;align-items:center;justify-content:center;overflow:hidden;text-align:center;}
+.cal-xh{
+  display:inline-block;font-size:6.5px;line-height:1.1;font-weight:800;
+  color:#fff;background:rgba(0,0,0,.5);padding:0 1px;border-radius:2px;letter-spacing:-.2px;
+}
+.cal-legend .lg-chip{
+  width:11px;height:11px;border-radius:3px;display:inline-block;flex:none;margin-right:3px;vertical-align:middle;
+}
+.cal-legend .lg-class{background:#1E5C4B;}
+.cal-legend .lg-partner{background:#FDAAC0;}
+.cal-legend .lg-machine{background:#4E6E80;}
+.cal-legend .lg-sparring{background:#D6BE6E;}
+.cal-legend .lg-txt{margin-left:3px;color:var(--dim);}
+
+/* ===== 统计卡 2+3 / 4×3 网格跨度 ===== */
+.stat-card.w3{grid-column:span 3;}
+.stat-card.w4{grid-column:span 4;}
+
+/* ===== 档案页：最常打 3 个球场 ===== */
+.venue-top{
+  display:flex;flex-direction:column;gap:6px;
+  padding:10px 2px 4px;
+}
+.venue-top.empty-top{font-size:12.5px;color:var(--dim);line-height:1.6;text-align:center;padding:18px 4px;}
+.vt-row{
+  display:flex;align-items:center;gap:11px;
+  padding:10px 12px;border-radius:11px;
+  background:rgba(242,237,225,.045);border:1px solid var(--line);
+}
+.vt-rank{
+  flex:none;width:22px;height:22px;border-radius:7px;
+  display:grid;place-items:center;font-size:12px;font-weight:700;
+  color:#CBD6BC;background:rgba(242,237,225,.07);border:1px solid var(--line);
+}
+.vt-name{flex:1;min-width:0;font-size:14.5px;font-weight:640;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.vt-hours{font-size:13.5px;font-weight:700;color:var(--green-bright);font-variant-numeric:tabular-nums;flex:none;}
+
+/* ===== Tips 汇总卡（封面） ===== */
+.tsum-row{
+  display:flex;align-items:center;gap:8px;
+  padding:7px 9px;border-radius:9px;background:rgba(242,237,225,.045);
+}
+.tsum-date{flex:none;font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums;}
+.tsum-type{flex:none;}
+.tsum-text{flex:1;min-width:0;font-size:12.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tsum-row .stars{flex:none;display:inline-flex;gap:1px;cursor:pointer;}
+.tsum-row .stars span{font-size:12px;line-height:1;}
+.tsum-row .stars .on{color:#FFD66B;}
+.tsum-row .stars .off{color:rgba(242,237,225,.22);}
+.tsum-toggle{margin:8px auto 0;display:block;}
+
+/* ===== Tips 逐条编辑（表单） ===== */
+.tips-edit{display:flex;flex-direction:column;gap:8px;}
+.tip-edit-row{display:flex;align-items:center;gap:8px;}
+.tip-idx{flex:none;width:18px;text-align:center;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums;}
+.tip-edit-row .tip-text{flex:1;min-width:0;min-height:40px;font-size:13.5px;}
+.tip-del{
+  flex:none;width:30px;height:30px;border-radius:8px;font-size:14px;color:var(--dim);
+  background:rgba(242,237,225,.05);border:1px solid var(--line);
+}
+.tip-del:active{color:var(--danger);}
+
+/* ===== 训练卡片里的 Tips 列表 ===== */
+.tips-list{margin-top:9px;display:flex;flex-direction:column;gap:4px;}
+.tip-line{
+  display:flex;gap:7px;font-size:12.5px;line-height:1.5;color:#DDD3BF;
+  padding:6px 9px;border-radius:8px;background:rgba(224,162,74,.08);border:1px solid rgba(224,162,74,.18);
+}
+.tip-dot{color:#E3B87C;flex:none;}
+
+/* ===== 报告：高星静态星 ===== */
+.stars-static{display:inline-flex;gap:1px;}
+.stars-static .on{color:#FFD66B;}
+.stars-static .off{color:rgba(242,237,225,.22);}
+
+/* 柱状图金色（球搭子） */
+.bar-fill.g{background:linear-gradient(90deg,#A88A2E,#E0CE94);}
