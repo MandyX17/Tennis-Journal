@@ -6,6 +6,16 @@
   const state = () => DB.getState();
   const esc = DB.esc;
 
+  /* 全局视图状态（严格模式下必须显式声明） */
+  let currentTab = 'learn';
+  let expenseFilter = null;
+  function addDays(dateStr, n) {
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + n);
+    const p = x => String(x).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+
   /* ---------------- 通用 ---------------- */
   let toastTimer = null;
   function toast(msg) {
@@ -87,24 +97,70 @@
   function renderStats() {
     const st = DB.computeStats();
     const tech = state().settings.techLevel || '1.0';
-    /* 第一排：总花费（左） + 技术等级（右）两张大卡 */
-    $('#statGrid').innerHTML = `
-      <div class="stat-card total" data-act="go-expense">
-        <span class="k">总花费 · Total</span>
-        <span class="v"><span class="cur">¥</span>${DB.fmtMoney(st.total)}</span>
-        <span class="meta">课包剩余 <b>${st.remaining}</b> 节</span>
-      </div>
-      <div class="stat-card tech" data-act="edit-tech">
+    const techCard = `<div class="stat-card tech" data-act="edit-tech">
         <span class="k">技术等级</span>
         <span class="v">${esc(tech)}<span class="edit">›</span></span>
         <span class="meta">点击可修改</span>
-      </div>
-      ${statCard('上课时长', DB.fmtHours(st.classH))}
-      ${statCard('自己练习', DB.fmtHours(st.selfH))}
-      ${statCard('教练费', '¥' + DB.fmtMoney(st.coach), 'accent')}
-      ${statCard('装备费', '¥' + DB.fmtMoney(st.equip))}
-      ${statCard('场地费', '¥' + DB.fmtMoney(st.venueFee))}
-      ${statCard('耗材费', '¥' + DB.fmtMoney(st.consum))}`;
+      </div>`;
+    const tCard = (k, v, cls) => statCard(k, v, cls);
+
+    /* 档案页：最常打 3 个球场 */
+    if (currentTab === 'venues') {
+      $('#statGrid').innerHTML = renderTopVenues();
+      return;
+    }
+
+    /* 学习 / 报告页：技术等级 + 上课（上排 2 张），陪练 + 球搭子 + 发球机（下排 3 张）；两排总宽相等 */
+    if (currentTab !== 'expense') {
+      $('#statGrid').innerHTML =
+        techCard +
+        tCard('上课时长', DB.fmtHours(st.classH), 'w3') +
+        tCard('陪练时长', DB.fmtHours(st.partnerH)) +
+        tCard('球搭子', DB.fmtHours(st.sparringH)) +
+        tCard('发球机', DB.fmtHours(st.machineH));
+      return;
+    }
+
+    /* 记账页：4 行 × 3 列撑满无空缺（总花费占 2 格） */
+    const amt = (k, v, filter, cls, span) => {
+      const on = expenseFilter === filter ? ' on' : '';
+      return `<div class="stat-card ${cls || ''}${on} ${span || ''}" data-act="stat-filter" data-filter="${filter}">
+        <span class="k">${k}</span>
+        <span class="v"><span class="cur">¥</span>${DB.fmtMoney(v)}</span>
+        <span class="meta">点击筛选</span>
+      </div>`;
+    };
+    $('#statGrid').innerHTML = `
+      ${amt('总花费', st.total, 'all', 'total', 'w4')}
+      ${amt('教练费', st.coach, 'coach', 'accent')}
+      ${amt('装备费', st.equip, 'equipment')}
+      ${amt('场地费', st.venueFee, 'venue')}
+      ${amt('耗材费', st.consum, 'consumable')}
+      ${amt('陪练费', st.partnerFee, 'partner')}
+      ${tCard('技术等级', esc(tech))}
+      ${tCard('上课时长', DB.fmtHours(st.classH))}
+      ${tCard('陪练时长', DB.fmtHours(st.partnerH))}
+      ${tCard('球搭子', DB.fmtHours(st.sparringH))}
+      ${tCard('发球机', DB.fmtHours(st.machineH))}`;
+  }
+
+  function renderTopVenues() {
+    const vs = DB.venueStats();
+    const arr = state().venues
+      .map(v => ({ v, st: vs[v.id] || { count: 0, hours: 0 } }))
+      .filter(x => x.st.hours > 0 || x.st.count > 0)
+      .sort((a, b) => b.st.hours - a.st.hours)
+      .slice(0, 3);
+    if (!arr.length) {
+      return `<div class="venue-top empty-top">还没有球场训练记录，打过球后会自动统计最常来的 3 个</div>`;
+    }
+    return `<div class="venue-top">
+      ${arr.map((x, i) => `<div class="vt-row">
+        <span class="vt-rank">${i + 1}</span>
+        <span class="vt-name">${esc(x.v.name)}</span>
+        <span class="vt-hours">${DB.fmtHours(x.st.hours)}</span>
+      </div>`).join('')}
+    </div>`;
   }
 
   /* ---------------- 记账 ---------------- */
@@ -117,7 +173,17 @@
     const st = DB.computeStats();
     $('#expenseMeta').textContent = `课包剩余 ${st.remaining} 节 · 共 ${s.expenses.length} 条`;
 
-    const html = s.expenses.map((e, i) => {
+    const filterBar = expenseFilter
+      ? `<div class="filter-bar"><span class="filter-tag">筛选：${({ coach: '教练费(课包+散买)', equipment: '装备', venue: '场地', consumable: '耗材', partner: '陪练费' })[expenseFilter] || ''}</span><button class="link-btn" data-act="stat-filter" data-filter="all">显示全部 ✕</button></div>`
+      : '';
+
+    const matched = s.expenses.filter(e => {
+      if (!expenseFilter || expenseFilter === 'all') return true;
+      if (expenseFilter === 'coach') return e.category === 'package' || e.category === 'alacarte';
+      return e.category === expenseFilter;
+    });
+
+    const html = matched.map((e, i) => {
       const cat = DB.CATEGORIES[e.category] || DB.CATEGORIES.other;
       const total = DB.expenseTotal(e);
       let amtSub = '';
@@ -175,8 +241,9 @@
         }).join('') + `</div>`;
       }
 
-      const canAppend = ['equipment', 'package', 'alacarte'].includes(e.category);
+      const canAppend = ['equipment', 'package', 'alacarte', 'consumable'].includes(e.category);
       const appendLabel = e.category === 'alacarte' ? '＋ 追加一节课'
+        : e.category === 'consumable' ? '＋ 追加明细'
         : e.category === 'equipment' ? '＋ 追加' : '＋ 追加';
 
       return `<div class="card item">
@@ -209,6 +276,11 @@
     const e = editId ? state().expenses.find(x => x.id === editId) : null;
     let cat = e ? e.category : 'equipment';
     let kind = (e && e.equipKind) || 'shoe';
+    const venueOpts = [`<option value="">未指定</option>`]
+      .concat(state().venues.map(v => `<option value="${v.id}">${esc(v.name)}</option>`)).join('');
+    const remindToggle = `
+      <div class="switch-row"><div><div class="t">关联上课提醒</div><div class="d">保存后在「学习」页生成一条未来 7 天内的提醒</div></div>
+      <div class="switch" id="fRemind"></div></div>`;
 
     const catBtns = Object.entries(DB.CATEGORIES).map(([k, v]) =>
       `<button type="button" data-cat="${k}" class="${k === cat ? 'on' : ''}">${v.icon} ${v.label}</button>`).join('');
@@ -281,7 +353,14 @@
             <div class="field"><label>教练</label>
               <input class="input" id="pCoach" value="${e ? esc(e.coach || '') : ''}"></div>
             <div class="field"><label>单节成本</label>
-              <div class="hint" id="pUnit">—</div></div>`;
+              <div class="hint" id="pUnit">—</div></div>
+            <div class="field-row">
+              <div class="field"><label>训练日期（关联提醒用）</label>
+                <input type="date" class="input" id="fDate" value="${e && e._date ? e._date : DB.todayStr()}"></div>
+              <div class="field"><label>场馆</label>
+                <select class="input" id="fVenue">${venueOpts}</select></div>
+            </div>
+            ${remindToggle}`;
           const up = () => {
             const tp = parseFloat(val('pTotal')) || 0;
             const tl = parseFloat(val('pLessons')) || 0;
@@ -298,7 +377,31 @@
               <input class="input" id="pCoach" value="${e ? esc(e.coach || '') : ''}"></div>
             <div class="field"><label>俱乐部 / 场地</label>
               <input class="input" id="pClub" value="${e ? esc(e.club || '') : ''}"></div>
+            <div class="field-row">
+              <div class="field"><label>训练日期（关联提醒用）</label>
+                <input type="date" class="input" id="fDate" value="${e && e._date ? e._date : DB.todayStr()}"></div>
+              <div class="field"><label>场馆</label>
+                <select class="input" id="fVenue">${venueOpts}</select></div>
+            </div>
+            ${remindToggle}
             <div class="hint" style="margin-bottom:12px">每次上课请在卡片上点「＋ 追加一节课」并填入<b>本次价格</b>；总花费按各次流水自动累加，每次价格可以不一样</div>`;
+
+        } else if (cat === 'partner') {
+          nameLabel.textContent = '名称（陪练费）';
+          extra.innerHTML = `
+            <div class="field-row">
+              <div class="field"><label>金额 ¥</label>
+                <input type="number" inputmode="decimal" class="input" id="xAmount" placeholder="0" value="${e && e.amount ? e.amount : ''}"></div>
+              <div class="field"><label>陪练对象</label>
+                <input class="input" id="xBrand" placeholder="如：小明 / 校队老王" value="${e ? esc(e.brand || '') : ''}"></div>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>训练日期（关联提醒用）</label>
+                <input type="date" class="input" id="fDate" value="${e && e._date ? e._date : DB.todayStr()}"></div>
+              <div class="field"><label>场馆</label>
+                <select class="input" id="fVenue">${venueOpts}</select></div>
+            </div>
+            ${remindToggle}`;
 
         } else if (cat === 'consumable') {
           nameLabel.textContent = '名称（每条耗材单独一条）';
@@ -343,6 +446,9 @@
       });
       renderExtra();
 
+      const sw = root.querySelector('#fRemind');
+      if (sw) sw.addEventListener('click', () => sw.classList.toggle('on'));
+
       root.querySelector('#fSave').addEventListener('click', () => {
         const name = root.querySelector('#fName').value.trim();
         if (!name) { toast('请填写名称'); return; }
@@ -384,9 +490,16 @@
           payload.coach = val('pCoach');
 
         } else if (cat === 'consumable') {
-          payload.amount = parseFloat(val('cPrice')) || 0;
-          payload.qty = parseFloat(val('cQty')) || 0;
-          payload.unit = val('cUnit');
+          const cPrice = parseFloat(val('cPrice')) || 0;
+          const cQty = parseFloat(val('cQty')) || 0;
+          const cUnit = val('cUnit');
+          const subs = (editId && e && e.subs) ? e.subs.slice() : [];
+          const newSub = { id: DB.uid('s'), name, qty: cQty, unit: cUnit, price: cPrice, date: DB.todayStr() };
+          if (subs.length) subs[0] = newSub; else subs.push(newSub);
+          payload.subs = subs;
+          payload.amount = cPrice;
+          payload.qty = cQty;
+          payload.unit = cUnit;
           payload.brand = '';
 
         } else if (cat === 'alacarte') {
@@ -398,13 +511,24 @@
         } else if (cat === 'venue') {
           payload.amount = parseFloat(val('xAmount')) || 0;
 
+        } else if (cat === 'partner') {
+          payload.amount = parseFloat(val('xAmount')) || 0;
+          payload.brand = val('xBrand');
+
         } else {
           payload.amount = parseFloat(val('xAmount')) || 0;
           payload.brand = val('xBrand');
         }
 
+        const remindEl = root.querySelector('#fRemind');
+        const remindOn = remindEl && remindEl.classList.contains('on');
+        const rDate = val('fDate') || DB.todayStr();
+        const rVenue = val('fVenue') || '';
+
         if (editId) DB.updateExpense(editId, payload);
         else DB.addExpense(payload);
+
+        if (remindOn) DB.addReminder({ date: rDate, venueId: rVenue, note: name });
 
         closeSheet();
         refresh();
@@ -516,6 +640,52 @@
       });
       return;
     }
+
+    /* 耗材：追加一条明细（名称 / 数量 / 单位 / 单价 / 日期） */
+    if (cat === 'consumable') {
+      const subs = e.subs || [];
+      openSheet(isEdit ? '编辑这条明细' : '追加一条耗材明细', `
+        <div class="field"><label>名称</label>
+          <input class="input" id="cName" placeholder="如：网球袜 / 手胶 / 防汗贴" value="${cur ? esc(cur.name || '') : ''}"></div>
+        <div class="field-row">
+          <div class="field"><label>数量</label>
+            <input type="number" inputmode="decimal" class="input" id="cQty" placeholder="如 3" value="${cur && cur.qty != null ? cur.qty : ''}"></div>
+          <div class="field"><label>单位</label>
+            <select class="input" id="cUnit">
+              <option value="">不填</option>
+              ${DB.UNITS.map(u => `<option value="${u}" ${cur && cur.unit === u ? 'selected' : ''}>${u}</option>`).join('')}
+            </select></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>单价 ¥</label>
+            <input type="number" inputmode="decimal" class="input" id="cPrice" placeholder="0" value="${cur && cur.price != null ? cur.price : ''}"></div>
+          <div class="field"><label>日期</label>
+            <input type="date" class="input" id="cDate" value="${cur ? (cur.date || today) : today}"></div>
+        </div>
+        <div class="hint" style="margin-bottom:14px">已录入 <b style="color:#E0D9C6">${subs.length}</b> 条明细，当前总额 <b style="color:#A9C77E">¥${DB.fmtMoney(DB.expenseTotal(e))}</b>，保存后自动累进</div>
+        <div class="form-actions">
+          <button class="btn-lg ghost" data-close>取消</button>
+          <button class="btn-lg primary" id="aSave">${isEdit ? '保存修改' : '确认追加'}</button>
+        </div>`, (root) => {
+        root.querySelector('#aSave').addEventListener('click', () => {
+          const name = root.querySelector('#cName').value.trim();
+          const price = parseFloat(root.querySelector('#cPrice').value) || 0;
+          if (!name) { toast('请填写名称'); return; }
+          if (price <= 0) { toast('请填写单价'); return; }
+          const patch = {
+            name,
+            qty: parseFloat(root.querySelector('#cQty').value) || 0,
+            unit: root.querySelector('#cUnit').value,
+            price,
+            date: root.querySelector('#cDate').value || today
+          };
+          if (isEdit) DB.updateSub(e.id, cur.id, patch); else DB.addSub(e.id, patch);
+          closeSheet(); refresh();
+          toast(`已保存，本项总额 ¥${DB.fmtMoney(DB.expenseTotal(e))}`);
+        });
+      });
+      return;
+    }
   }
 
   /* ---------------- 学习记录 ---------------- */
@@ -527,7 +697,7 @@
   function renderLearn() {
     const s = state();
     const st = DB.computeStats();
-    $('#learnMeta').textContent = `累计网球时长 ${DB.fmtHours(st.totalH)} · 上课 ${DB.fmtHours(st.classH)} / 自练 ${DB.fmtHours(st.selfH)}`;
+    $('#learnMeta').textContent = `累计 ${DB.fmtHours(st.totalH)} · 上课 ${DB.fmtHours(st.classH)} / 陪练 ${DB.fmtHours(st.partnerH)} / 发球机 ${DB.fmtHours(st.machineH)} / 球搭子 ${DB.fmtHours(st.sparringH)}`;
 
     const venueMap = {};
     s.venues.forEach(v => venueMap[v.id] = v.name);
@@ -553,7 +723,7 @@
         </div>
         ${(l.techPoints || []).length ? `<div class="tech-row">${l.techPoints.map(t => `<span class="chip green sm">${esc(t)}</span>`).join('')}</div>` : ''}
         ${l.gains ? `<div class="gain"><span class="ico">✅</span><span>${esc(l.gains)}</span></div>` : ''}
-        ${l.tips ? `<div class="tips-box"><div class="tips-head" data-act="toggle-tips"><span>⚠️</span><span>Tips / 易错点</span><span class="arrow">›</span></div><div class="tips-body">${esc(l.tips)}</div></div>` : ''}
+        ${l.tips && l.tips.length ? `<div class="tips-list">${l.tips.map(t => `<div class="tip-line"><span class="tip-dot">•</span>${esc(t.text)}</div>`).join('')}</div>` : ''}
         ${atts.length ? `<div class="thumbs">${atts.map(a => `
           <div class="thumb" data-act="open-media" data-id="${a.id}">
             ${a.type === 'video' ? `<div class="play">▶</div><div class="vtag">视频</div>` : `<img alt="">`}
@@ -566,6 +736,103 @@
     }).join('') || `<div class="empty"><span class="big">🎾</span>还没有训练记录，点右上角记一次</div>`;
 
     hydrateThumbs();
+
+    const noteEl = $('#learnNote');
+    if (noteEl) {
+      noteEl.value = state().learnNote || '';
+      noteEl.oninput = () => { state().learnNote = noteEl.value; DB.save(); };
+    }
+    renderTechStat();
+    renderReminders();
+  }
+
+  let tipsExpanded = false;
+  function renderTechStat() {
+    const s = state();
+    const all = [];
+    s.lessons.forEach(l => (l.tips || []).forEach(t => {
+      all.push({ lid: l.id, tid: t.id, text: t.text, stars: Number(t.stars) || 0, date: l.date, type: l.type });
+    }));
+    all.sort((a, b) => (b.stars - a.stars) || ((b.date || '') < (a.date || '') ? -1 : 1));
+    const box = $('#techStat');
+    if (!box) return;
+    if (!all.length) {
+      box.innerHTML = '<div class="empty" style="padding:10px">还没有 Tips，训练后随手记一句易错点</div>';
+      return;
+    }
+    const show = tipsExpanded ? all : all.slice(0, 3);
+    const typeLabel = t => (DB.LESSON_TYPES[t] || {}).label || '训练';
+    box.innerHTML = show.map(a => `
+      <div class="tsum-row">
+        <span class="tsum-date">${DB.fmtDateShort(a.date)}</span>
+        <span class="tsum-type chip sm">${esc(typeLabel(a.type))}</span>
+        <span class="tsum-text">${esc(a.text)}</span>
+        <span class="stars" data-act="tip-star" data-lid="${a.lid}" data-tid="${a.tid}">
+          ${[1, 2, 3, 4, 5].map(n => `<span class="${n <= a.stars ? 'on' : 'off'}" data-n="${n}">★</span>`).join('')}
+        </span>
+      </div>`).join('') +
+      (all.length > 3 ? `<button class="link-btn tsum-toggle" data-act="tips-toggle">${tipsExpanded ? '收起' : '展开全部（' + all.length + '）'}</button>` : '');
+  }
+
+  function renderReminders() {
+    const s = state();
+    const vmap = {}; s.venues.forEach(v => vmap[v.id] = v.name);
+    const today = DB.todayStr();
+    const max = addDays(today, 7);
+    const box = $('#reminderList');
+    if (!box) return;
+    const list = (s.reminders || [])
+      .filter(r => !r.done && r.date && r.date >= today && r.date <= max)
+      .sort((a, b) => (a.date || '') < (b.date || '') ? -1 : 1);
+    if (!list.length) {
+      box.innerHTML = '<div class="empty" style="padding:10px">未来 7 天暂无约好的课，点「＋ 添加」记一笔</div>';
+      return;
+    }
+    box.innerHTML = list.map(r => `
+      <div class="remind-item">
+        <div class="ri-main">
+          <div class="ri-date">${esc(r.date)}<b>${r.time ? ' ' + esc(r.time) : ''}</b></div>
+          <div class="ri-meta">${r.venueId ? '📍 ' + esc(vmap[r.venueId] || '') : ''}${r.note ? (r.venueId ? ' · ' : '') + esc(r.note) : ''}</div>
+        </div>
+        <button class="ri-del" data-act="del-reminder" data-id="${r.id}">✕</button>
+      </div>`).join('');
+  }
+
+  function openReminderForm() {
+    const s = state();
+    const venueOpts = [`<option value="">未指定</option>`]
+      .concat(s.venues.map(v => `<option value="${v.id}">${esc(v.name)}</option>`))
+      .join('');
+    const today = DB.todayStr();
+    const max = addDays(today, 7);
+    openSheet('添加上课提醒', `
+      <div class="field"><label>日期（未来 7 天内）</label>
+        <input type="date" class="input" id="rDate" min="${today}" max="${max}" value="${today}"></div>
+      <div class="field-row">
+        <div class="field"><label>时间</label>
+          <input type="time" class="input" id="rTime" value="19:00"></div>
+        <div class="field"><label>场馆</label>
+          <select class="input" id="rVenue">${venueOpts}</select></div>
+      </div>
+      <div class="field"><label>备注</label>
+        <input class="input" id="rNote" placeholder="如：带拍 / 课前热身"></div>
+      <div class="form-actions">
+        <button class="btn-lg ghost" data-close>取消</button>
+        <button class="btn-lg primary" id="rSave">保存</button>
+      </div>`, (root) => {
+      root.querySelector('#rSave').addEventListener('click', () => {
+        const date = root.querySelector('#rDate').value;
+        if (!date) { toast('请选择日期'); return; }
+        if (date < today || date > max) { toast('只能约未来 7 天内'); return; }
+        DB.addReminder({
+          date,
+          time: root.querySelector('#rTime').value || '',
+          venueId: root.querySelector('#rVenue').value || '',
+          note: root.querySelector('#rNote').value.trim() || ''
+        });
+        closeSheet(); refresh(); toast('已添加提醒');
+      });
+    });
   }
 
   function hydrateThumbs() {
@@ -632,7 +899,9 @@
         <textarea class="input" id="lGains" placeholder="一句话，比如：正手击球点更靠前了">${l ? esc(l.gains || '') : ''}</textarea></div>
 
       <div class="field"><label>Tips / 易错点 / 下次注意</label>
-        <textarea class="input" id="lTips" placeholder="自由记录要点">${l ? esc(l.tips || '') : ''}</textarea></div>
+        <div id="lTipsBox" class="tips-edit"></div>
+        <button type="button" class="btn-ghost" id="lTipsAdd" style="margin-top:8px;width:100%">＋ 添加一条</button>
+      </div>
 
       <div class="field-row">
         <div class="field"><label>本次费用（可选）</label>
@@ -682,13 +951,43 @@
         renderTech();
       });
 
+      /* Tips 逐条编辑（数组） */
+      let tipsList = l ? (l.tips || []).map(t => ({ id: t.id || DB.uid('t'), text: t.text || '', stars: Number(t.stars) || 0 })) : [];
+      function renderTipsEdit() {
+        const box = root.querySelector('#lTipsBox');
+        if (!box) return;
+        if (!tipsList.length) {
+          box.innerHTML = '<div class="hint" style="margin:2px 0 0">还没有，点下面「＋ 添加一条」记下易错点</div>';
+        } else {
+          box.innerHTML = tipsList.map((t, i) => `<div class="tip-edit-row">
+            <span class="tip-idx">${i + 1}</span>
+            <input class="input tip-text" data-i="${i}" placeholder="如：发球抛球再稳一点" value="${esc(t.text)}">
+            <button type="button" class="tip-del" data-i="${i}">✕</button>
+          </div>`).join('');
+          box.querySelectorAll('.tip-text').forEach(inp => {
+            inp.addEventListener('input', () => { tipsList[Number(inp.dataset.i)].text = inp.value; });
+          });
+          box.querySelectorAll('.tip-del').forEach(b => {
+            b.addEventListener('click', () => { tipsList.splice(Number(b.dataset.i), 1); renderTipsEdit(); });
+          });
+        }
+      }
+      renderTipsEdit();
+      const tipsAddBtn = root.querySelector('#lTipsAdd');
+      if (tipsAddBtn) tipsAddBtn.addEventListener('click', () => {
+        tipsList.push({ id: DB.uid('t'), text: '', stars: 0 });
+        renderTipsEdit();
+        const ins = root.querySelectorAll('.tip-text');
+        if (ins.length) ins[ins.length - 1].focus();
+      });
+
       const personLabel = root.querySelector('#lPersonLabel');
       const personInput = root.querySelector('#lPerson');
       function syncPersonLabel() {
-        const map = { class: '教练', partner: '陪练对象', machine: '—（发球机）', sparring: '搭子', solo: '—' };
+        const map = { class: '教练', partner: '陪练对象', machine: '—（发球机）', sparring: '搭子' };
         personLabel.textContent = '对象 / 谁';
         personInput.placeholder = map[type] ? map[type] : '姓名';
-        personInput.disabled = (type === 'machine' || type === 'solo');
+        personInput.disabled = (type === 'machine');
       }
       root.querySelectorAll('#lType button').forEach(b => {
         b.addEventListener('click', () => {
@@ -778,7 +1077,9 @@
         const person = personInput.disabled ? '' : personInput.value.trim();
         const venueId = root.querySelector('#lVenue').value;
         const gains = root.querySelector('#lGains').value.trim();
-        const tips = root.querySelector('#lTips').value.trim();
+        const tips = tipsList
+          .filter(t => (t.text || '').trim())
+          .map(t => ({ id: t.id || DB.uid('t'), text: t.text.trim(), stars: Number(t.stars) || 0 }));
         const cost = parseFloat(root.querySelector('#lCost').value) || 0;
         const courseId = courseSel.value;
 
@@ -828,25 +1129,43 @@
     if (calCollapsed) { box.style.display = 'none'; return; }
     box.style.display = '';
 
-    const hoursMap = DB.lessonHoursByDay();
+    const typeMap = DB.lessonTypeHoursByDay();
     const today = DB.todayStr();
     const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+    const startMonth = (year === 2026) ? 9 : 0; // 2026 从 10 月开始；其他年份显示全年
 
     let html = '';
-    for (let m = 0; m < 12; m++) {
+    for (let m = startMonth; m < 12; m++) {
       const first = new Date(year, m, 1).getDay();
       const lastDay = new Date(year, m + 1, 0).getDate();
       let cells = '';
       for (let i = 0; i < first; i++) cells += `<span class="out"></span>`;
       for (let d = 1; d <= lastDay; d++) {
         const ds = `${year}-${DB.pad2(m + 1)}-${DB.pad2(d)}`;
-        const h = hoursMap[ds] || 0;
-        let lv = 'lv0';
-        if (h > 0 && h <= 1) lv = 'lv1';
-        else if (h > 1 && h <= 2) lv = 'lv2';
-        else if (h > 2) lv = 'lv3';
-        const cls = [lv, h > 0 ? 'has' : '', ds === today ? 'today' : ''].join(' ');
-        cells += `<span class="${cls}" data-act="day" data-date="${ds}" title="${ds}${h ? ' · ' + h + 'h' : ''}"></span>`;
+        const tm = typeMap[ds] || { class: 0, partner: 0, machine: 0, sparring: 0 };
+        const totalH = tm.class + tm.partner + tm.machine + tm.sparring;
+        let style = '';
+        let label = '';
+        if (totalH > 0) {
+          const parts = [];
+          if (tm.class > 0) parts.push(['#1E5C4B', tm.class]);
+          if (tm.partner > 0) parts.push(['#FDAAC0', tm.partner]);
+          if (tm.machine > 0) parts.push(['#4E6E80', tm.machine]);
+          if (tm.sparring > 0) parts.push(['#D6BE6E', tm.sparring]);
+          if (parts.length === 1) {
+            style = `background:${parts[0][0]}`;
+          } else {
+            const [a, b] = parts;
+            const ra = Math.round(a[1] / totalH * 100);
+            style = `background:linear-gradient(90deg, ${a[0]} 0%, ${a[0]} ${ra}%, ${b[0]} ${ra}%, ${b[0]} 100%)`;
+          }
+          if (totalH > 1) {
+            const txt = (Math.round(totalH * 10) / 10).toString().replace(/\.0$/, '');
+            label = `<b class="cal-xh">${txt}h</b>`;
+          }
+        }
+        const cls = [totalH > 0 ? 'has' : '', ds === today ? 'today' : ''].join(' ');
+        cells += `<span class="${cls}" style="${style}" data-act="day" data-date="${ds}" title="${ds}${totalH ? ' · ' + DB.fmtHours(totalH) : ''}">${label}</span>`;
       }
       html += `<div class="cal-month">
         <div class="m-label">${monthNames[m]}</div>
@@ -868,7 +1187,7 @@
           <div class="l-meta">${l.person ? esc(l.person) : ''}${l.venueId ? ' · ' + esc(venueMap[l.venueId] || '') : ''}</div>
           ${(l.techPoints || []).length ? `<div class="tech-row">${l.techPoints.map(t => `<span class="chip green sm">${esc(t)}</span>`).join('')}</div>` : ''}
           ${l.gains ? `<div class="gain"><span class="ico">✅</span><span>${esc(l.gains)}</span></div>` : ''}
-          ${l.tips ? `<div class="tips-box open"><div class="tips-head"><span>⚠️</span><span>Tips</span></div><div class="tips-body">${esc(l.tips)}</div></div>` : ''}
+          ${(l.tips && l.tips.length) ? `<div class="tips-list">${l.tips.map(t => `<div class="tip-line"><span class="tip-dot">•</span>${esc(t.text)}</div>`).join('')}</div>` : ''}
         </div>`).join('')}
       </div>` : `<div class="empty"><span class="big">🌿</span>这天没有训练记录</div>`);
   }
@@ -1025,6 +1344,12 @@
       <div class="bar-track"><div class="bar-fill ${cls || ''}" style="width:${Math.max(2, pct)}%"></div></div>
     </div>`;
   }
+  function barRowVal(name, valStr, pct, cls) {
+    return `<div class="bar-row">
+      <div class="bar-top"><span class="n">${name}</span><span class="v">${valStr} <small style="color:#8C9884;font-weight:500">${pct}%</small></span></div>
+      <div class="bar-track"><div class="bar-fill ${cls || ''}" style="width:${Math.max(2, pct)}%"></div></div>
+    </div>`;
+  }
 
   function renderReport() {
     const s = state();
@@ -1056,12 +1381,38 @@
     });
     const monthKeys = Object.keys(months).filter(Boolean).sort().reverse();
 
-    /* Tips */
-    const tipLessons = s.lessons.filter(l => l.tips && l.tips.trim());
-    const tipTechs = Array.from(new Set(tipLessons.flatMap(l => l.techPoints || [])));
-    const filteredTips = tipLessons
-      .filter(l => tipsFilter === '全部' || (l.techPoints || []).includes(tipsFilter))
-      .sort((a, b) => (a.date || '') < (b.date || '') ? 1 : -1);
+    /* Tips（数组格式） */
+    const allTips = DB.flatTips();
+    const tipTechs = Array.from(new Set(s.lessons.flatMap(l => l.techPoints || [])));
+    const lesTech = {};
+    s.lessons.forEach(l => { lesTech[l.id] = l.techPoints || []; });
+    const filteredTips = allTips
+      .filter(t => tipsFilter === '全部' || (lesTech[t.lid] || []).includes(tipsFilter))
+      .sort((a, b) => (b.date || '') < (a.date || '') ? -1 : 1);
+
+    /* 训练类型分布 */
+    const typeDist = DB.typeDistribution();
+    const typeOrder = [['class', '上课', ''], ['partner', '陪练', 'o'], ['machine', '发球机', 'b'], ['sparring', '球搭子', 'g']];
+    const totalTypeH = typeOrder.reduce((a, x) => a + (typeDist[x[0]] || 0), 0) || 1;
+
+    /* 每小时成本 */
+    const costPerHour = st.totalH > 0 ? st.total / st.totalH : 0;
+
+    /* 技术点偏科提醒 */
+    const techMap = DB.techPointStats();
+    const techEntries = Object.entries(techMap).sort((a, b) => b[1].count - a[1].count);
+    let longDormant = null;
+    Object.entries(techMap).forEach(([t, m]) => {
+      if (!longDormant || (m.last || '') < (longDormant.last || '')) longDormant = { t, last: m.last };
+    });
+
+    /* 月度训练柱状图 */
+    const monthly = DB.monthlyLessonStats();
+    const monthKeysAll = Object.keys(monthly).sort();
+    const maxMonthH = Math.max(1, ...monthKeysAll.map(mk => monthly[mk].hours));
+
+    /* 高星 Tips 重点清单 */
+    const highStar = allTips.filter(t => t.stars >= 4).sort((a, b) => b.stars - a.stars || ((b.date || '') < (a.date || '') ? -1 : 1));
 
     /* 收获 */
     const gainLessons = s.lessons.filter(l => l.gains && l.gains.trim())
@@ -1081,10 +1432,54 @@
         <div class="r-title">关键指标</div>
         <div class="kv-grid">
           <div class="kv"><div class="k">累计网球总时长</div><div class="v">${DB.fmtHours(st.totalH)}</div></div>
-          <div class="kv"><div class="k">上课 / 自练</div><div class="v">${DB.fmtHours(st.classH)} <small>/ ${DB.fmtHours(st.selfH)}</small></div></div>
           <div class="kv"><div class="k">课包剩余</div><div class="v">${st.remaining} <small>节</small></div></div>
+          <div class="kv"><div class="k">上课 / 陪练</div><div class="v">${DB.fmtHours(st.classH)} <small>/ ${DB.fmtHours(st.partnerH)}</small></div></div>
+          <div class="kv"><div class="k">发球机 / 球搭子</div><div class="v">${DB.fmtHours(st.machineH)} <small>/ ${DB.fmtHours(st.sparringH)}</small></div></div>
           <div class="kv"><div class="k">累计训练</div><div class="v">${s.lessons.length} <small>次</small></div></div>
         </div>
+      </div>
+
+      <div class="r-card">
+        <div class="r-title">训练类型分布 <span class="tag">累计 ${DB.fmtHours(totalTypeH)}</span></div>
+        ${typeOrder.map(([k, label, cls]) => {
+          const h = typeDist[k] || 0;
+          return barRowVal(label, DB.fmtHours(h), Math.round(h / totalTypeH * 100), cls);
+        }).join('') || '<div class="empty">暂无训练记录</div>'}
+      </div>
+
+      <div class="r-card">
+        <div class="r-title">每小时成本 <span class="tag">总花费 ÷ 总时长</span></div>
+        <div class="kv-grid">
+          <div class="kv"><div class="k">综合每小时成本</div><div class="v" style="color:var(--orange-soft)">¥${DB.fmtMoney(costPerHour)}<small> / 小时</small></div></div>
+          <div class="kv"><div class="k">累计训练次数</div><div class="v">${s.lessons.length}<small> 次</small></div></div>
+        </div>
+        <div class="hint" style="margin-top:9px">按月每小时成本（花费 ÷ 当月时长）</div>
+        ${monthKeysAll.map(mk => {
+          const exp = (months[mk] && months[mk].exp) || 0;
+          const h = monthly[mk].hours;
+          const cph = h > 0 ? exp / h : 0;
+          return `<div class="row-line"><span class="l">${DB.fmtMonth(mk)}</span><span class="r">¥${DB.fmtMoney(cph)}<small>/h</small></span></div>`;
+        }).join('') || '<div class="empty" style="padding:8px">暂无记录</div>'}
+      </div>
+
+      <div class="r-card">
+        <div class="r-title">技术点偏科提醒</div>
+        ${techEntries.length ? `
+          <div class="row-line"><span class="l">练得最多</span><span class="r">${esc(techEntries[0][0])}<small>${techEntries[0][1].count} 次</small></span></div>
+          ${longDormant ? `<div class="row-line"><span class="l">最久没练</span><span class="r">${esc(longDormant.t)}<small>${longDormant.last ? DB.fmtDateShort(longDormant.last) : '—'}</small></span></div>` : ''}
+        ` : '<div class="empty" style="padding:10px">还没有技术点记录</div>'}
+      </div>
+
+      <div class="r-card">
+        <div class="r-title">月度训练 <span class="tag">${monthKeysAll.length} 个月</span></div>
+        ${monthKeysAll.length ? monthKeysAll.map(mk => {
+          const mm = monthly[mk];
+          const pct = Math.round(mm.hours / maxMonthH * 100);
+          return `<div class="bar-row">
+            <div class="bar-top"><span class="n">${DB.fmtMonth(mk)}</span><span class="v">${mm.count} 次 · ${DB.fmtHours(mm.hours)}</span></div>
+            <div class="bar-track"><div class="bar-fill" style="width:${Math.max(4, pct)}%"></div></div>
+          </div>`;
+        }).join('') : '<div class="empty">暂无记录</div>'}
       </div>
 
       <div class="r-card">
@@ -1103,18 +1498,28 @@
       </div>
 
       <div class="r-card">
-        <div class="r-title">Tips 仓库 <span class="tag">${tipLessons.length} 条</span></div>
+        <div class="r-title">💡 Tips 仓库 <span class="tag">${allTips.length} 条</span></div>
         ${tipTechs.length ? `<div class="filter-row">
           <span class="chip ${tipsFilter === '全部' ? 'on' : ''}" data-act="tip-filter" data-t="全部">全部</span>
           ${tipTechs.map(t => `<span class="chip ${tipsFilter === t ? 'on' : ''}" data-act="tip-filter" data-t="${esc(t)}">${esc(t)}</span>`).join('')}
         </div>` : ''}
-        ${filteredTips.length ? filteredTips.map(l => `<div class="row-line" style="display:block">
+        ${filteredTips.length ? filteredTips.map(t => `<div class="row-line" style="display:block">
           <div style="display:flex;gap:6px;align-items:center;margin-bottom:3px">
-            <span class="l" style="font-size:11px">${DB.fmtDateShort(l.date)} · ${esc(l.person || '')}</span>
-            ${(l.techPoints || []).map(t => `<span class="chip sm">${esc(t)}</span>`).join('')}
+            <span class="l" style="font-size:11px">${DB.fmtDateShort(t.date)} · ${esc((state().lessons.find(l => l.id === t.lid) || {}).person || '')}</span>
           </div>
-          <div style="font-size:12.5px;line-height:1.55;color:#E0D9C6;white-space:pre-wrap">${esc(l.tips)}</div>
+          <div style="font-size:12.5px;line-height:1.55;color:#E0D9C6;white-space:pre-wrap">${esc(t.text)}</div>
         </div>`).join('') : '<div class="empty" style="padding:10px">还没有 Tips，训练后随手记一句</div>'}
+      </div>
+
+      <div class="r-card">
+        <div class="r-title">⭐ 高星 Tips 重点清单 <span class="tag">★≥4 · ${highStar.length} 条</span></div>
+        ${highStar.length ? highStar.map(t => `<div class="row-line" style="display:block">
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:3px">
+            <span class="stars-static">${[1,2,3,4,5].map(n => `<span class="${n <= t.stars ? 'on' : 'off'}">★</span>`).join('')}</span>
+            <span class="l" style="font-size:11px">${DB.fmtDateShort(t.date)}</span>
+          </div>
+          <div style="font-size:12.5px;line-height:1.55;color:#E0D9C6;white-space:pre-wrap">${esc(t.text)}</div>
+        </div>`).join('') : '<div class="empty" style="padding:10px">还没有 ★≥4 的重点 Tips，在「学习」页封面给要点点亮星星</div>'}
       </div>
 
       <div class="r-card">
@@ -1359,8 +1764,10 @@
 
   /* ---------------- 路由 ---------------- */
   function switchTab(name) {
+    currentTab = name;
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('is-active', t.dataset.tab === name));
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('is-active', v.dataset.view === name));
+    renderStats();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -1451,6 +1858,42 @@
           return;
         }
         case 'go-expense': switchTab('expense'); return;
+        case 'stat-filter': {
+          const f = el.dataset.filter;
+          expenseFilter = (f === 'all' || !f) ? null : f;
+          if (currentTab !== 'expense') switchTab('expense');
+          renderStats(); renderExpense();
+          return;
+        }
+        case 'add-reminder': openReminderForm(); return;
+        case 'del-reminder': {
+          const rid = el.dataset.id;
+          DB.removeReminder(rid); refresh(); toast('已删除提醒'); return;
+        }
+        case 'star-tech': {
+          const t = el.dataset.t;
+          const arr = state().starredTech || [];
+          if (arr.includes(t)) state().starredTech = arr.filter(x => x !== t);
+          else state().starredTech = arr.concat(t);
+          DB.save(); renderTechStat();
+          return;
+        }
+        case 'tip-star': {
+          const star = ev.target.closest('[data-n]');
+          const n = star ? Number(star.dataset.n) : 0;
+          const lid = el.dataset.lid, tid = el.dataset.tid;
+          const les = state().lessons.find(x => x.id === lid);
+          if (les) {
+            const tp = (les.tips || []).find(t => t.id === tid);
+            if (tp) { tp.stars = n; DB.save(); renderTechStat(); }
+          }
+          return;
+        }
+        case 'tips-toggle': {
+          tipsExpanded = !tipsExpanded;
+          renderTechStat();
+          return;
+        }
       }
     }
 
