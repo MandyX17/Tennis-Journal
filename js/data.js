@@ -51,16 +51,16 @@
     package: { label: '课程课包', icon: '🎾' },
     alacarte: { label: '散买课程', icon: '🎫' },
     consumable: { label: '耗材配件', icon: '🧴' },
+    partner: { label: '陪练费', icon: '🤝' },
     venue: { label: '场地', icon: '📍' },
     other: { label: '其他', icon: '📦' }
   };
 
   const LESSON_TYPES = {
     class: { label: '上课', counts: 'class', tone: 'green' },
-    partner: { label: '陪练', counts: 'class', tone: 'orange' },
-    machine: { label: '发球机', counts: 'self', tone: 'blue' },
-    sparring: { label: '找搭子', counts: 'self', tone: 'gold' },
-    solo: { label: '自己练习', counts: 'self', tone: 'rose' }
+    partner: { label: '陪练', counts: 'partner', tone: 'orange' },
+    machine: { label: '发球机', counts: 'machine', tone: 'blue' },
+    sparring: { label: '找搭子', counts: 'sparring', tone: 'gold' }
   };
 
   const VENUE_TYPES = ['室内', '室外', '风雨棚'];
@@ -109,14 +109,7 @@
           { id: uid('s'), date: '2026-10-01', brand: 'wilson intrigue pro', size: '38 2/3', price: 750, note: '' }
         ]
       },
-      /* ② 网球袜：耗材配件（独立条目，数量仅展示） */
-      {
-        id: uid('e'), category: 'consumable', name: '网球袜',
-        brand: '', amount: 57, dateMonth: '2026-10',
-        unit: '双', qty: 3,
-        createdAt: Date.now() + 2, subs: [], note: ''
-      },
-      /* ③ 课包 */
+      /* ② 课包 */
       {
         id: uid('e'), category: 'package', name: '网球课 9# tennis center',
         brand: '', amount: 6000, dateMonth: '2026-10',
@@ -128,7 +121,7 @@
           { id: uid('s'), date: '2026-10-18', lessons: 1, note: '' }
         ]
       },
-      /* ④ 散买课：按每次流水价格累加 */
+      /* ③ 散买课：按每次流水价格累加 */
       {
         id: uid('e'), category: 'alacarte', name: '星灿耀 体验课',
         brand: '教练 刘颜彰（网球国二）', amount: 394, dateMonth: '2026-10',
@@ -143,7 +136,7 @@
         createdAt: Date.now() + 5, note: '',
         subs: [{ id: uid('s'), date: '2026-10-21', lessons: 1, price: 500, note: '' }]
       },
-      /* ⑤ 网球拍 */
+      /* ④ 网球拍 */
       {
         id: uid('e'), category: 'equipment', equipKind: 'racket', name: '网球拍',
         brand: '', amount: 1515, dateMonth: '2026-10',
@@ -152,7 +145,7 @@
           { id: uid('s'), date: '2026-10-01', spec: 'PD100 300g 2 号手柄', price: 1515, note: '' }
         ]
       },
-      /* ⑥ 网球线：归入装备，不计入耗材累计 */
+      /* ⑤ 网球线：归入装备，不计入耗材累计 */
       {
         id: uid('e'), category: 'equipment', equipKind: 'string', name: '网球线',
         brand: '', amount: 29, dateMonth: '2026-10',
@@ -161,14 +154,7 @@
           { id: uid('s'), date: '2026-10-01', spec: 'PD blast 1.25 50 磅', price: 29, note: '' }
         ]
       },
-      /* ⑦ 手胶 */
-      {
-        id: uid('e'), category: 'consumable', name: '手胶',
-        brand: '', amount: 72, dateMonth: '2026-10',
-        unit: '个', qty: 20,
-        createdAt: Date.now() + 8, subs: [], note: ''
-      },
-      /* ⑧ 网球帽（原空顶帽） */
+      /* ⑥ 网球帽（原空顶帽） */
       {
         id: uid('e'), category: 'equipment', equipKind: 'hat', name: '网球帽',
         brand: '', amount: 270, dateMonth: '2026-10',
@@ -177,7 +163,7 @@
           { id: uid('s'), date: '2026-10-01', brand: 'wilson', detail: '', price: 270, note: '' }
         ]
       },
-      /* ⑨ 网球服（原速干服） */
+      /* ⑦ 网球服（原速干服） */
       {
         id: uid('e'), category: 'equipment', equipKind: 'clothes', name: '网球服',
         brand: '', amount: 580, dateMonth: '2026-10',
@@ -186,34 +172,38 @@
           { id: uid('s'), date: '2026-10-01', brand: 'rulu lululemon', detail: '', price: 580, note: '' }
         ]
       },
-      /* ⑩ 防汗贴 */
+      /* ⑧ 耗材配件：合并为单一「耗材配件」条目，明细用 subs 记录（袜/手胶/防汗贴） */
       {
-        id: uid('e'), category: 'consumable', name: '防汗贴',
-        brand: '', amount: 8, dateMonth: '2026-10',
-        unit: '个', qty: 1,
-        createdAt: Date.now() + 11, subs: [], note: ''
+        id: uid('e'), category: 'consumable', name: '耗材配件',
+        brand: '', amount: 137, dateMonth: '2026-10',
+        createdAt: Date.now() + 12, note: '',
+        subs: [
+          { id: uid('s'), name: '网球袜', qty: 3, unit: '双', price: 57, date: '2026-10-01', note: '' },
+          { id: uid('s'), name: '手胶', qty: 20, unit: '个', price: 72, date: '2026-10-01', note: '' },
+          { id: uid('s'), name: '防汗贴', qty: 1, unit: '个', price: 8, date: '2026-10-01', note: '' }
+        ]
       }
     ];
 
     const lessons = [
       {
         id: uid('l'), date: '2026-10-14', type: 'class', person: '龙晨硕',
-        venueId: V_DF, hours: 1, techPoints: ['正手'], gains: '', tips: '',
+        venueId: V_DF, hours: 1, techPoints: ['正手'], gains: '', tips: [],
         attachments: [], cost: 0, createdAt: Date.now() + 1, note: ''
       },
       {
         id: uid('l'), date: '2026-10-18', type: 'class', person: '龙晨硕',
-        venueId: V_DF, hours: 1, techPoints: ['正手', '反手'], gains: '', tips: '',
+        venueId: V_DF, hours: 1, techPoints: ['正手', '反手'], gains: '', tips: [],
         attachments: [], cost: 0, createdAt: Date.now() + 2, note: ''
       },
       {
         id: uid('l'), date: '2026-10-20', type: 'class', person: '刘颜彰',
-        venueId: V_XC, hours: 1, techPoints: ['正手', '反手', '找点'], gains: '', tips: '',
+        venueId: V_XC, hours: 1, techPoints: ['正手', '反手', '找点'], gains: '', tips: [],
         attachments: [], cost: 0, createdAt: Date.now() + 3, note: ''
       },
       {
         id: uid('l'), date: '2026-10-21', type: 'class', person: '刘晨同学',
-        venueId: V_GC, hours: 1, techPoints: ['正手', '小场'], gains: '', tips: '动作纠正',
+        venueId: V_GC, hours: 1, techPoints: ['正手', '小场'], gains: '', tips: [{ id: uid('t'), text: '动作纠正', stars: 0 }],
         attachments: [], cost: 0, createdAt: Date.now() + 4, note: ''
       }
     ];
@@ -222,6 +212,9 @@
       version: DATA_VERSION,
       settings: { appName: '🦀的网球手账', techLevel: '1.0', createdAt: Date.now() },
       expenses, lessons, venues,
+      reminders: [],
+      learnNote: '',
+      starredTech: [],
       installHintDismissed: false
     };
   }
@@ -237,6 +230,8 @@
       /* 版本不一致（模型已重构）→ 重铺预置数据 */
       if (!obj || obj.version !== DATA_VERSION) { state = seed(); save(); return state; }
       state = normalize(obj);
+      save(); /* 确保迁移（如耗材合并）被持久化 */
+      return state;
     } catch (e) {
       console.warn('load failed, re-seed', e);
       state = seed();
@@ -251,6 +246,9 @@
     s.expenses = Array.isArray(s.expenses) ? s.expenses : [];
     s.lessons = Array.isArray(s.lessons) ? s.lessons : [];
     s.venues = Array.isArray(s.venues) ? s.venues : [];
+    s.reminders = Array.isArray(s.reminders) ? s.reminders : [];
+    if (typeof s.learnNote !== 'string') s.learnNote = '';
+    if (!Array.isArray(s.starredTech)) s.starredTech = [];
     s.venues.forEach(v => {
       if (!Array.isArray(v.photos)) v.photos = [];
       if (!Array.isArray(v.types)) v.types = [];
@@ -264,8 +262,50 @@
       if (!Array.isArray(l.techPoints)) l.techPoints = [];
       l.hours = Number(l.hours) || 0;
       l.cost = Number(l.cost) || 0;
+      if (typeof l.tips === 'string') {
+        l.tips = l.tips.trim() ? [{ id: uid('t'), text: l.tips, stars: 0 }] : [];
+      } else if (!Array.isArray(l.tips)) {
+        l.tips = [];
+      } else {
+        l.tips.forEach(t => { if (!t.id) t.id = uid('t'); t.stars = Number(t.stars) || 0; if (typeof t.text !== 'string') t.text = ''; });
+      }
     });
+    s.reminders.forEach(r => {
+      if (!r.id) r.id = uid('r');
+      r.date = r.date || '';
+      r.time = r.time || '';
+      r.venueId = r.venueId || '';
+      r.note = r.note || '';
+    });
+    /* 旧格式迁移：多条独立耗材(无 subs)合并为单一耗材条目 + subs 明细 */
+    migrateConsumables(s);
     return s;
+  }
+
+  /* 把历史的多条独立「耗材配件」合并成一条，明细写入 subs（仅一次） */
+  function migrateConsumables(s) {
+    if (s.settings && s.settings._consumMerged) return;
+    const oldCons = s.expenses.filter(e => e.category === 'consumable' && (!e.subs || e.subs.length === 0));
+    if (oldCons.length <= 1) {
+      if (s.settings) s.settings._consumMerged = true;
+      return;
+    }
+    const newSubs = oldCons.map(e => ({
+      id: uid('s'),
+      name: e.name || '耗材',
+      qty: Number(e.qty) || 0,
+      unit: e.unit || '',
+      price: Number(e.amount) || 0,
+      date: (e.dateMonth || '2026-10') + '-01',
+      note: ''
+    }));
+    s.expenses = s.expenses.filter(e => !(e.category === 'consumable' && (!e.subs || e.subs.length === 0)));
+    s.expenses.push({
+      id: uid('e'), category: 'consumable', name: '耗材配件',
+      brand: '', amount: newSubs.reduce((a, b) => a + (Number(b.price) || 0), 0),
+      dateMonth: '2026-10', note: '', createdAt: Date.now() + 12, subs: newSubs
+    });
+    if (s.settings) s.settings._consumMerged = true;
   }
 
   function save() {
@@ -305,9 +345,9 @@
   function alacarteTotal(e) {
     return (e.subs || []).reduce((a, s) => a + (Number(s.price) || Number(s.amount) || 0), 0);
   }
-  /* 耗材配件：数量仅作静态展示，不再自动累加 */
+  /* 耗材配件：总额 = 各明细价格之和（有明细时） */
   function consumableQty(e) {
-    return Number(e.qty) || 0;
+    return (e.subs || []).length;
   }
   /* 装备：总价 = 各次采购实例价格之和 */
   function equipSum(e) {
@@ -335,13 +375,17 @@
         return alacarteTotal(e);
       case 'equipment':
         return equipSum(e);
+      case 'consumable':
+        return (e.subs && e.subs.length)
+          ? e.subs.reduce((a, s) => a + (Number(s.price) || 0), 0)
+          : (Number(e.amount) || 0);
       default:
         return Number(e.amount) || 0;
     }
   }
 
   function computeStats() {
-    const st = { total: 0, coach: 0, equip: 0, consum: 0, venueFee: 0, other: 0, classH: 0, selfH: 0, totalH: 0, remaining: 0, equipCount: 0, packageCount: 0 };
+    const st = { total: 0, coach: 0, equip: 0, consum: 0, partnerFee: 0, venueFee: 0, other: 0, classH: 0, partnerH: 0, machineH: 0, sparringH: 0, totalH: 0, remaining: 0, equipCount: 0, packageCount: 0 };
     (state.expenses || []).forEach(e => {
       const t = expenseTotal(e);
       st.total += t;
@@ -349,18 +393,57 @@
       else if (e.category === 'package') { st.coach += t; st.packageCount++; }
       else if (e.category === 'alacarte') { st.coach += t; }
       else if (e.category === 'consumable') { st.consum += t; }
+      else if (e.category === 'partner') { st.partnerFee += t; }
       else if (e.category === 'venue') { st.venueFee += t; }
       else { st.other += t; }
 
       if (e.isPackage) st.remaining += remainingLessons(e);
     });
     (state.lessons || []).forEach(l => {
-      const meta = LESSON_TYPES[l.type] || LESSON_TYPES.class;
       const h = Number(l.hours) || 0;
-      if (meta.counts === 'class') st.classH += h; else st.selfH += h;
+      if (l.type === 'class') st.classH += h;
+      else if (l.type === 'partner') st.partnerH += h;
+      else if (l.type === 'machine') st.machineH += h;
+      else if (l.type === 'sparring') st.sparringH += h;
     });
-    st.totalH = st.classH + st.selfH;
+    st.totalH = st.classH + st.partnerH + st.machineH + st.sparringH;
     return st;
+  }
+
+  function typeDistribution() {
+    const map = { class: 0, partner: 0, machine: 0, sparring: 0 };
+    (state.lessons || []).forEach(l => { if (map[l.type] != null) map[l.type] += Number(l.hours) || 0; });
+    return map;
+  }
+  function monthlyLessonStats() {
+    const map = {};
+    (state.lessons || []).forEach(l => {
+      const mk = monthKey(l.date);
+      if (!map[mk]) map[mk] = { count: 0, hours: 0 };
+      map[mk].count++;
+      map[mk].hours += Number(l.hours) || 0;
+    });
+    return map;
+  }
+  function techPointStats() {
+    const map = {};
+    (state.lessons || []).forEach(l => {
+      (l.techPoints || []).forEach(tp => {
+        if (!map[tp]) map[tp] = { count: 0, last: '' };
+        map[tp].count++;
+        if (!map[tp].last || l.date > map[tp].last) map[tp].last = l.date;
+      });
+    });
+    return map;
+  }
+  function flatTips() {
+    const out = [];
+    (state.lessons || []).forEach(l => {
+      (l.tips || []).forEach(t => out.push({
+        lid: l.id, tid: t.id, text: t.text, stars: Number(t.stars) || 0, date: l.date, type: l.type
+      }));
+    });
+    return out;
   }
 
   function venueStats() {
@@ -386,6 +469,34 @@
       map[l.date] = (map[l.date] || 0) + (Number(l.hours) || 0);
     });
     return map;
+  }
+
+  /* 按天聚合各类型训练时长（日历上色用） */
+  function lessonTypeHoursByDay() {
+    const map = {};
+    (state.lessons || []).forEach(l => {
+      if (!l.date) return;
+      if (!map[l.date]) map[l.date] = { class: 0, partner: 0, machine: 0, sparring: 0 };
+      if (l.type === 'class' || l.type === 'partner' || l.type === 'machine' || l.type === 'sparring') {
+        map[l.date][l.type] += Number(l.hours) || 0;
+      }
+    });
+    return map;
+  }
+
+  /* ---------- 提醒 ---------- */
+  function addReminder(payload) {
+    const r = Object.assign({
+      id: uid('r'), createdAt: Date.now(), date: '', time: '', venueId: '', note: ''
+    }, payload);
+    state.reminders = state.reminders || [];
+    state.reminders.push(r);
+    save();
+    return r;
+  }
+  function removeReminder(id) {
+    state.reminders = (state.reminders || []).filter(r => r.id !== id);
+    save();
   }
 
   /* ---------- 增删改 ---------- */
@@ -434,7 +545,7 @@
     const l = Object.assign({
       id: uid('l'), createdAt: Date.now(), attachments: [], techPoints: [],
       date: todayStr(), hours: 1, type: 'class', person: '', venueId: '',
-      gains: '', tips: '', cost: 0, note: ''
+      gains: '', tips: [], cost: 0, note: ''
     }, payload);
     state.lessons.push(l);
     save();
@@ -579,10 +690,12 @@
     uid, pad2, todayStr, monthKey, fmtMoney, fmtHours, fmtMonth, fmtDateShort, esc, clamp,
     consumedLessons, remainingLessons, packageUnitPrice, alacarteCount, alacarteTotal,
     consumableQty, equipSum, subSummary, expenseTotal,
-    computeStats, venueStats, lessonHoursByDay,
+    computeStats, venueStats, lessonHoursByDay, lessonTypeHoursByDay,
+    typeDistribution, monthlyLessonStats, techPointStats, flatTips,
     addExpense, updateExpense, removeExpense, addSub, removeSub, updateSub,
     addLesson, updateLesson, removeLesson,
     addVenue, updateVenue, removeVenue,
+    addReminder, removeReminder,
     media, mediaURL, revokeAllURLs
   };
 })(window);
