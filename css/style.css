@@ -790,3 +790,93 @@ textarea.input{min-height:74px;resize:vertical;line-height:1.55;}
 
 /* 柱状图金色（球搭子） */
 .bar-fill.g{background:linear-gradient(90deg,#A88A2E,#E0CE94);}
+
+/* ===== D：总花费卡「实耗」小字 + 场地费拆分小字（M） ===== */
+.stat-card .sub{
+  display:block;font-size:10.5px;color:var(--muted);
+  margin-top:3px;font-variant-numeric:tabular-nums;line-height:1.4;
+  white-space:normal;word-break:break-word;
+}
+.stat-card.total .sub.consumed{color:#CDE0B6;font-weight:600;}
+.stat-card.total .sub.consumed::before{content:"实耗 ";font-weight:500;color:var(--muted);}
+
+/* ===== P：统计卡低调箭头（点击筛选保留） ===== */
+.stat-card .meta{
+  position:absolute;top:10px;right:11px;font-size:16px;color:var(--dim);line-height:1;
+}
+.stat-card.on .meta{color:var(--green-bright);}
+.stat-card.tech .meta{position:static;top:auto;right:auto;font-size:11px;color:#C6B7A6;margin-top:5px;}
+
+/* ===== J：上课提醒卡更醒目（主色描边 + 左侧色条） ===== */
+.remind-item{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;border-radius:11px;
+  background:linear-gradient(160deg,rgba(127,160,94,.12),rgba(242,237,225,.04));
+  border:1px solid rgba(127,160,94,.36);
+  border-left:3px solid var(--green-bright);
+  position:relative;
+}
+.remind-item.derived{
+  background:rgba(242,237,225,.045);
+  border:1px solid var(--line-strong);
+  border-left:3px solid var(--dim);
+}
+.ri-actions{display:flex;align-items:center;gap:6px;flex:none;}
+.ri-done{
+  flex:none;height:30px;padding:0 11px;border-radius:8px;
+  font-size:12px;font-weight:700;color:#16210F;white-space:nowrap;
+  background:linear-gradient(160deg,var(--green),var(--green-deep));
+  box-shadow:0 3px 10px rgba(127,160,94,.25);
+}
+.ri-done:active{transform:scale(.96);}
+.ri-tag{
+  margin-left:6px;font-size:10px;font-weight:700;color:#C6B7A6;
+  background:rgba(242,237,225,.08);border:1px solid var(--line);
+  padding:1px 6px;border-radius:999px;vertical-align:middle;
+}
+
+/* ===== K：档案页照片墙（5 张一排，不换行）+ 全屏相册 ===== */
+.photo-wall{grid-column:1 / -1;padding:6px 2px 2px;}
+.pw-row{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.pw-thumb{
+  flex:none;width:64px;height:64px;border-radius:12px;overflow:hidden;
+  background:rgba(0,0,0,.25);border:1px solid var(--line);
+}
+.pw-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+.pw-more{
+  flex:none;height:64px;padding:0 12px;border-radius:12px;
+  font-size:12px;font-weight:600;color:var(--green-bright);white-space:nowrap;
+  background:rgba(127,160,94,.12);border:1px solid rgba(127,160,94,.3);
+}
+.pw-more:active{background:rgba(127,160,94,.2);}
+.gallery-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.g-thumb{
+  aspect-ratio:1/1;border-radius:10px;overflow:hidden;
+  background:rgba(0,0,0,.25);border:1px solid var(--line);
+}
+.g-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+
+/* ===== O：Tips 汇总卡「点行展开」 ===== */
+.tsum-row{cursor:pointer;}
+
+/* ===== G/W：表单内联「＋新建场地」 ===== */
+.quick-venue{
+  margin-top:8px;padding:11px 12px;border-radius:12px;
+  background:rgba(127,160,94,.08);border:1px dashed rgba(127,160,94,.34);
+}
+.quick-venue .confirm-msg{margin:2px 0 12px;}
+.tsum-text{
+  flex:1;min-width:0;font-size:12.5px;color:var(--text);
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;
+}
+.tsum-row.expanded .tsum-text{-webkit-line-clamp:unset;line-clamp:unset;overflow:visible;white-space:normal;}
+
+/* ===== N：报告顶部指标网格（4 并排） ===== */
+.r-grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:9px;}
+.kv.mini{padding:9px 8px;text-align:center;}
+.kv.mini .k{font-size:9.5px;margin-bottom:4px;line-height:1.3;}
+.kv.mini .v{font-size:18px;font-variant-numeric:tabular-nums;}
+.kv.mini .v small{font-size:9.5px;margin-left:1px;}
+.kv.mini .v.cph{color:var(--orange-soft);}
+.r-sub{font-size:11px;color:var(--dim);margin-top:7px;line-height:1.55;}
+.r-sub:first-of-type{margin-top:9px;}
