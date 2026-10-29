@@ -256,6 +256,21 @@
     s.expenses.forEach(e => {
       if (!Array.isArray(e.subs)) e.subs = [];
       if (!e.dateMonth) e.dateMonth = '2026-10';
+      if (!e.date) {
+        /* Y：装备缺日期默认统一写当月 15 号（10.15）；其余兜底月初 */
+        if (e.category === 'equipment') e.date = (e.dateMonth || '2026-10') + '-15';
+        else e.date = (e.dateMonth || '2026-10') + '-01';
+      }
+      if (e.isPackage) {
+        if (e.totalUnits == null) e.totalUnits = e.totalLessons || 0;
+        if (!e.packUnit) e.packUnit = '节';
+        (e.subs || []).forEach(s => {
+          if (s.units == null) s.units = (s.lessons != null ? s.lessons : 0);
+          if (!s.date) s.date = (e.dateMonth || '2026-10') + '-01';
+        });
+      } else {
+        (e.subs || []).forEach(s => { if (!s.date) s.date = e.date; });
+      }
     });
     s.lessons.forEach(l => {
       if (!Array.isArray(l.attachments)) l.attachments = [];
@@ -333,9 +348,34 @@
   function remainingLessons(e) {
     return Math.max(0, (Number(e.totalLessons) || 0) - consumedLessons(e));
   }
+  /* 包的「剩余单位」：总单位 − 已消耗单位（课包/场地包/机包通用，按 units/lessons 兜底） */
+  function remainingUnits(e) {
+    return Math.max(0, packTotalUnits(e) - consumedUnits(e));
+  }
   function packageUnitPrice(e) {
-    const tl = Number(e.totalLessons) || 0;
+    const tl = packTotalUnits(e);
     return tl > 0 ? (Number(e.totalPrice) || 0) / tl : 0;
+  }
+  /* 包的「总单位数」：课包用总节数，场地/发球机包用总时长/次数（新字段，旧数据兜底总节数） */
+  function packTotalUnits(e) {
+    if (e.totalUnits != null) return Number(e.totalUnits) || 0;
+    return Number(e.totalLessons) || 0;
+  }
+  /* 单次消耗的单位数：场地/机包用 units，旧课包用 lessons 兜底 */
+  function subUnits(s) {
+    if (s.units != null) return Number(s.units) || 0;
+    if (s.lessons != null) return Number(s.lessons) || 0;
+    return 0;
+  }
+  /* 已消耗（实耗）单位数：仅统计 date ≤ 今天 的消耗（未来的不算实耗） */
+  function consumedUnits(e) {
+    const today = todayStr();
+    return (e.subs || []).reduce((a, s) => a + (s.date && s.date <= today ? subUnits(s) : 0), 0);
+  }
+  /* 已预约（未来）单位数：date > 今天 */
+  function bookedUnits(e) {
+    const today = todayStr();
+    return (e.subs || []).reduce((a, s) => a + (s.date && s.date > today ? subUnits(s) : 0), 0);
   }
   /* 散买课：已上节数 = 流水条数累加 */
   function alacarteCount(e) {
@@ -384,17 +424,45 @@
     }
   }
 
+  /* 实耗（已实际发生的花费）：仅统计 date ≤ 今天的消耗 / 支出
+     - 预付包（课包/场地包/机包）：已消耗单位 × 单价
+     - 散课：已上且 date≤今天 的每次价格
+     - 单次场地费/装备/耗材/陪练/其他：购买日期 ≤ 今天 即全额计入 */
+  function expenseConsumedValue(e, today) {
+    today = today || todayStr();
+    if (e.category === 'package') {
+      return consumedUnits(e) * packageUnitPrice(e);
+    }
+    if (e.category === 'alacarte') {
+      return (e.subs || []).reduce((a, s) => a + (s.date && s.date <= today ? (Number(s.price) || Number(s.amount) || 0) : 0), 0);
+    }
+    if (e.category === 'venue') {
+      if (e.isPackage) return consumedUnits(e) * packageUnitPrice(e);
+      return (e.date && e.date <= today) ? (Number(e.amount) || 0) : 0;
+    }
+    return (e.date && e.date <= today) ? expenseTotal(e) : 0;
+  }
+
   function computeStats() {
-    const st = { total: 0, coach: 0, equip: 0, consum: 0, partnerFee: 0, venueFee: 0, other: 0, classH: 0, partnerH: 0, machineH: 0, sparringH: 0, totalH: 0, remaining: 0, equipCount: 0, packageCount: 0 };
+    const today = todayStr();
+    const st = {
+      total: 0, coach: 0, equip: 0, consum: 0, partnerFee: 0, venueFee: 0, venueFeeCourt: 0, venueFeeMachine: 0,
+      other: 0, classH: 0, partnerH: 0, machineH: 0, sparringH: 0, totalH: 0, remaining: 0,
+      equipCount: 0, packageCount: 0, consumed: 0
+    };
     (state.expenses || []).forEach(e => {
       const t = expenseTotal(e);
       st.total += t;
+      st.consumed += expenseConsumedValue(e, today);
       if (e.category === 'equipment') { st.equip += t; st.equipCount++; }
       else if (e.category === 'package') { st.coach += t; st.packageCount++; }
       else if (e.category === 'alacarte') { st.coach += t; }
       else if (e.category === 'consumable') { st.consum += t; }
       else if (e.category === 'partner') { st.partnerFee += t; }
-      else if (e.category === 'venue') { st.venueFee += t; }
+      else if (e.category === 'venue') {
+        st.venueFee += t;
+        if (e.venueKind === 'machine') st.venueFeeMachine += t; else st.venueFeeCourt += t;
+      }
       else { st.other += t; }
 
       if (e.isPackage) st.remaining += remainingLessons(e);
@@ -496,6 +564,21 @@
   }
   function removeReminder(id) {
     state.reminders = (state.reminders || []).filter(r => r.id !== id);
+    save();
+  }
+  /* X：过期手动提醒自动删除（date < 今天），不动训练/记账等其他记录 */
+  function pruneExpiredReminders() {
+    const today = todayStr();
+    const before = (state.reminders || []).length;
+    state.reminders = (state.reminders || []).filter(r => !r.date || r.date >= today);
+    if (state.reminders.length !== before) save();
+  }
+
+  /* T：整库导出 / 导入（备份防丢） */
+  function exportState() { return JSON.stringify(state); }
+  function importState(json) {
+    const obj = typeof json === 'string' ? JSON.parse(json) : json;
+    state = normalize(obj);
     save();
   }
 
@@ -688,14 +771,15 @@
     load, save, getState, resetAll, replaceState,
     seed,
     uid, pad2, todayStr, monthKey, fmtMoney, fmtHours, fmtMonth, fmtDateShort, esc, clamp,
-    consumedLessons, remainingLessons, packageUnitPrice, alacarteCount, alacarteTotal,
-    consumableQty, equipSum, subSummary, expenseTotal,
+    consumedLessons, remainingLessons, remainingUnits, packageUnitPrice, packTotalUnits, subUnits,
+    consumedUnits, bookedUnits, alacarteCount, alacarteTotal,
+    consumableQty, equipSum, subSummary, expenseTotal, expenseConsumedValue,
     computeStats, venueStats, lessonHoursByDay, lessonTypeHoursByDay,
     typeDistribution, monthlyLessonStats, techPointStats, flatTips,
     addExpense, updateExpense, removeExpense, addSub, removeSub, updateSub,
     addLesson, updateLesson, removeLesson,
     addVenue, updateVenue, removeVenue,
-    addReminder, removeReminder,
+    addReminder, removeReminder, pruneExpiredReminders, exportState, importState,
     media, mediaURL, revokeAllURLs
   };
 })(window);
