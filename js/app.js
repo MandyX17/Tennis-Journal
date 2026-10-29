@@ -41,13 +41,14 @@
     document.body.style.overflow = '';
   }
 
-  function confirmSheet(title, msg, okText, onOk, danger) {
+  function confirmSheet(title, msg, okText, onOk, danger, secText, onSec) {
     openSheet(title, `
       <p class="confirm-msg">${msg}</p>
       <div class="form-actions">
-        <button class="btn-lg ghost" data-close>取消</button>
+        ${secText ? `<button class="btn-lg ghost" id="cfSec">${secText}</button>` : `<button class="btn-lg ghost" data-close>取消</button>`}
         <button class="btn-lg ${danger ? 'danger' : 'primary'}" id="cfOk">${okText || '确定'}</button>
       </div>`, () => {
+      if (secText) $('#cfSec').addEventListener('click', () => { closeSheet(); if (onSec) onSec(); });
       $('#cfOk').addEventListener('click', () => { closeSheet(); onOk(); });
     });
   }
@@ -104,9 +105,10 @@
       </div>`;
     const tCard = (k, v, cls) => statCard(k, v, cls);
 
-    /* 档案页：最常打 3 个球场 */
+    /* 档案页：照片墙（5 张一排，更多走全屏相册） */
     if (currentTab === 'venues') {
-      $('#statGrid').innerHTML = renderTopVenues();
+      $('#statGrid').innerHTML = renderPhotoWall();
+      hydratePhotoWall();
       return;
     }
 
@@ -121,23 +123,33 @@
       return;
     }
 
-    /* 记账页：4 行 × 3 列撑满无空缺（总花费占 2 格） */
-    const amt = (k, v, filter, cls, span) => {
+    /* 记账页：12 张卡 4×3 撑满（首排 总花费 / 技术等级 / 总时长，其余 9 张 3×3） */
+    const amt = (k, v, filter, cls, opts) => {
       const on = expenseFilter === filter ? ' on' : '';
-      return `<div class="stat-card ${cls || ''}${on} ${span || ''}" data-act="stat-filter" data-filter="${filter}">
+      const sub = opts && opts.sub ? `<span class="sub">${opts.sub}</span>` : '';
+      return `<div class="stat-card ${cls || ''}${on}" data-act="stat-filter" data-filter="${filter}">
         <span class="k">${k}</span>
         <span class="v"><span class="cur">¥</span>${DB.fmtMoney(v)}</span>
-        <span class="meta">点击筛选</span>
+        ${sub}
+        <span class="meta" aria-hidden="true">›</span>
       </div>`;
     };
+    const totalCard = `<div class="stat-card total" data-act="stat-filter" data-filter="all">
+        <span class="k">总花费</span>
+        <span class="v"><span class="cur">¥</span>${DB.fmtMoney(st.total)}</span>
+        <span class="sub consumed">实耗：¥${DB.fmtMoney(st.consumed)}</span>
+        <span class="meta" aria-hidden="true">›</span>
+      </div>`;
+    const venueSub = `场地 ¥${DB.fmtMoney(st.venueFeeCourt)} · 发球机 ¥${DB.fmtMoney(st.venueFeeMachine)}`;
     $('#statGrid').innerHTML = `
-      ${amt('总花费', st.total, 'all', 'total', 'w4')}
+      ${totalCard}
+      ${techCard}
+      ${tCard('总时长', DB.fmtHours(st.totalH))}
       ${amt('教练费', st.coach, 'coach', 'accent')}
       ${amt('装备费', st.equip, 'equipment')}
-      ${amt('场地费', st.venueFee, 'venue')}
+      ${amt('场地费', st.venueFee, 'venue', '', { sub: venueSub })}
       ${amt('耗材费', st.consum, 'consumable')}
       ${amt('陪练费', st.partnerFee, 'partner')}
-      ${tCard('技术等级', esc(tech))}
       ${tCard('上课时长', DB.fmtHours(st.classH))}
       ${tCard('陪练时长', DB.fmtHours(st.partnerH))}
       ${tCard('球搭子', DB.fmtHours(st.sparringH))}
@@ -161,6 +173,45 @@
         <span class="vt-hours">${DB.fmtHours(x.st.hours)}</span>
       </div>`).join('')}
     </div>`;
+  }
+
+  /* K：档案页照片墙——聚合所有球场照片，5 张一排不换行，超出走全屏相册 */
+  function renderPhotoWall() {
+    const s = state();
+    const all = [];
+    s.venues.forEach(v => (v.photos || []).forEach(p => all.push({ id: p.id, venue: v.name })));
+    if (!all.length) {
+      return `<div class="photo-wall empty-top">还没有球场照片，去球场卡片点「＋ 照片」上传，这里会汇总成照片墙</div>`;
+    }
+    const thumb = (p, i) => `<div class="pw-thumb" data-act="open-media" data-id="${p.id}"><img alt=""></div>`;
+    const preview = all.slice(0, 5).map(thumb).join('');
+    const more = all.length > 5
+      ? `<button class="pw-more" data-act="open-gallery">更多 ${all.length - 5} 张 ▾</button>` : '';
+    return `<div class="photo-wall">
+      <div class="pw-row">${preview}${more}</div>
+    </div>`;
+  }
+
+  function openGallery() {
+    const s = state();
+    const all = [];
+    s.venues.forEach(v => (v.photos || []).forEach(p => all.push({ id: p.id, venue: v.name })));
+    if (!all.length) return;
+    openSheet(`照片墙（${all.length} 张）`, `
+      <div class="gallery-grid">
+        ${all.map(p => `<div class="g-thumb" data-act="open-media" data-id="${p.id}"><img alt=""></div>`).join('')}
+      </div>`, () => {
+      hydrateGallery();
+    });
+  }
+  function hydrateGallery() {
+    const map = {};
+    state().venues.forEach(v => (v.photos || []).forEach(p => map[p.id] = p));
+    document.querySelectorAll('.gallery-grid [data-act="open-media"]').forEach(node => {
+      const img = node.querySelector('img');
+      if (!img || !map[node.dataset.id]) return;
+      DB.mediaURL(node.dataset.id).then(u => { if (u) img.src = u; });
+    });
   }
 
   /* ---------------- 记账 ---------------- */
@@ -189,11 +240,15 @@
       let amtSub = '';
       let chips = `<span class="chip sm">${cat.label}</span>`;
 
-      if (e.category === 'package') {
-        const rem = DB.remainingLessons(e);
-        amtSub = `${e.totalLessons} 节 · 剩 ${rem} 节`;
-        chips += `<span class="chip green sm">剩 ${rem} 节</span>`;
-        if (e.coach) chips += `<span class="chip sm">${esc(e.coach)}</span>`;
+      if (e.category === 'package' || (e.category === 'venue' && e.isPackage)) {
+        const pu = e.packUnit || (e.category === 'venue' ? '次' : '节');
+        const total = DB.packTotalUnits(e);
+        const rem = DB.remainingUnits(e);
+        amtSub = `${total} ${pu} · 剩 ${rem} ${pu}`;
+        chips += `<span class="chip green sm">剩 ${rem} ${pu}</span>`;
+        if (e.category === 'package' && e.coach) chips += `<span class="chip sm">${esc(e.coach)}</span>`;
+        if (e.category === 'venue' && e.venueKind === 'machine') chips += `<span class="chip blue sm">发球机包</span>`;
+        else if (e.category === 'venue') chips += `<span class="chip sm">场地包</span>`;
       } else if (e.category === 'equipment') {
         const n = (e.subs || []).length;
         const kind = DB.EQUIP_KINDS[e.equipKind];
@@ -209,24 +264,27 @@
         if (e.coach) chips += `<span class="chip sm">${esc(e.coach)}</span>`;
       } else if (e.category === 'venue') {
         amtSub = '场地费';
+        if (e.venueKind === 'machine') chips += `<span class="chip blue sm">发球机</span>`;
       }
 
       /* 子流水：课包=耗课 / 装备=采购实例 / 散买=每次上课 */
       let subsHTML = '';
       if (e.subs && e.subs.length) {
         const chrono = [...e.subs].sort((a, b) => (a.date || '') < (b.date || '') ? -1 : 1);
-        let accL = 0;
+        let accU = 0;
         const map = {};
         chrono.forEach(sb => {
-          accL += Number(sb.lessons) || 0;
-          map[sb.id] = { rem: (Number(e.totalLessons) || 0) - accL };
+          accU += DB.subUnits(sb);
+          map[sb.id] = { rem: DB.packTotalUnits(e) - accU };
         });
-        const editable = e.category === 'equipment' || e.category === 'alacarte';
+        const editable = e.category === 'equipment' || e.category === 'alacarte' || (e.category === 'venue' && e.isPackage);
         subsHTML = `<div class="subs">` + [...chrono].reverse().map(sb => {
           const m = map[sb.id];
           let txt = '';
-          if (e.category === 'package') txt = `耗 ${sb.lessons || 0} 节 · 剩 ${Math.max(0, m.rem)} 节`;
-          else if (e.category === 'equipment') txt = DB.subSummary(sb);
+          if (e.category === 'package' || (e.category === 'venue' && e.isPackage)) {
+            const pu = e.packUnit || (e.category === 'venue' ? '次' : '节');
+            txt = `扣 ${DB.subUnits(sb)} ${pu} · 剩 ${Math.max(0, m.rem)} ${pu}`;
+          } else if (e.category === 'equipment') txt = DB.subSummary(sb);
           else if (e.category === 'alacarte') {
             txt = `一节课 · ¥${DB.fmtMoney(Number(sb.price) || 0)}`;
             if (sb.note) txt += ' · ' + esc(sb.note);
@@ -241,9 +299,10 @@
         }).join('') + `</div>`;
       }
 
-      const canAppend = ['equipment', 'package', 'alacarte', 'consumable'].includes(e.category);
+      const canAppend = ['equipment', 'package', 'alacarte', 'consumable'].includes(e.category) || (e.category === 'venue' && e.isPackage);
       const appendLabel = e.category === 'alacarte' ? '＋ 追加一节课'
         : e.category === 'consumable' ? '＋ 追加明细'
+        : e.category === 'venue' ? '＋ 扣包'
         : e.category === 'equipment' ? '＋ 追加' : '＋ 追加';
 
       return `<div class="card item">
@@ -271,11 +330,96 @@
     $('#expenseList').innerHTML = html || `<div class="empty"><span class="big">🎾</span>还没有记录，点右上角新增一笔</div>`;
   }
 
+  /* ------- G/W：快速新建场地（各表单「＋ 新建场地」复用） ------- */
+  function venueOptsNew(selectedId) {
+    return [`<option value="">未指定</option>`]
+      .concat(state().venues.map(v => `<option value="${v.id}" ${v.id === selectedId ? 'selected' : ''}>${esc(v.name)}</option>`))
+      .concat(`<option value="__new_venue__">＋ 新建场地</option>`)
+      .join('');
+  }
+  function bindVenueNew(root, selId, cb) {
+    const sel = root.querySelector('#' + selId);
+    if (!sel) return;
+    sel.addEventListener('change', () => {
+      if (sel.value === '__new_venue__') {
+        sel.value = sel.dataset.prev || '';
+        showInlineVenue(root, sel, cb);
+      } else {
+        sel.dataset.prev = sel.value;
+        if (cb) cb(sel.value);
+      }
+    });
+  }
+  /* G/W：＋新建场地 —— 在原表单内联展开，不抢占底部弹窗，创建后即时选中 */
+  function showInlineVenue(root, sel, cb) {
+    const old = root.querySelector('.quick-venue');
+    if (old) old.remove();
+    const wrap = document.createElement('div');
+    wrap.className = 'quick-venue';
+    wrap.innerHTML = `
+      <div class="field" style="margin-top:10px"><label>新场地名称</label>
+        <input class="input" id="qvName" placeholder="如：东风9号球场"></div>
+      <div class="field"><label>场地类型（可多选）</label>
+        <div class="segmented" id="qvTypes">
+          ${DB.VENUE_TYPES.map(t => `<button type="button" data-t="${t}" class="">${t}</button>`).join('')}
+        </div></div>
+      <div class="form-actions">
+        <button class="btn-lg ghost" id="qvCancel">取消</button>
+        <button class="btn-lg primary" id="qvSave">创建并选中</button>
+      </div>`;
+    const host = sel.closest('.field') || sel.parentNode;
+    host.after(wrap);
+
+    let types = [];
+    wrap.querySelectorAll('#qvTypes button').forEach(b => b.addEventListener('click', () => {
+      const t = b.dataset.t;
+      if (types.includes(t)) types = types.filter(x => x !== t); else types.push(t);
+      b.classList.toggle('on', types.includes(t));
+    }));
+    wrap.querySelector('#qvCancel').addEventListener('click', () => wrap.remove());
+    wrap.querySelector('#qvSave').addEventListener('click', () => {
+      const name = wrap.querySelector('#qvName').value.trim();
+      if (!name) { toast('请填写名称'); return; }
+      const s = state();
+      const norm = x => x.trim().toLowerCase().replace(/\s+/g, '');
+      const nn = norm(name);
+      const similar = s.venues.find(v => { const nv = norm(v.name); return nv === nn || nv.includes(nn) || nn.includes(nv); });
+      if (similar) {
+        wrap.innerHTML = `<p class="confirm-msg">检测到「${esc(similar.name)}」，是否直接选用已有场地？</p>
+          <div class="form-actions">
+            <button class="btn-lg ghost" id="qvNew">仍要新建</button>
+            <button class="btn-lg primary" id="qvUse">改用已有</button>
+          </div>`;
+        wrap.querySelector('#qvUse').addEventListener('click', () => finishVenue(similar.id));
+        wrap.querySelector('#qvNew').addEventListener('click', () => {
+          const v = DB.addVenue({ name, types, fee: 0, rating: 0, review: '', note: '' });
+          finishVenue(v.id);
+        });
+        return;
+      }
+      const v = DB.addVenue({ name, types, fee: 0, rating: 0, review: '', note: '' });
+      finishVenue(v.id);
+    });
+
+    function finishVenue(id) {
+      const v = state().venues.find(x => x.id === id);
+      const opt = document.createElement('option');
+      opt.value = id; opt.textContent = v ? v.name : '新场地';
+      sel.appendChild(opt);
+      sel.value = id;
+      sel.dataset.prev = id;
+      wrap.remove();
+      if (cb) cb(id);
+      toast('已新建并选中场地');
+    }
+  }
+
   /* ------- 记账表单 ------- */
   function openExpenseForm(editId) {
     const e = editId ? state().expenses.find(x => x.id === editId) : null;
     let cat = e ? e.category : 'equipment';
     let kind = (e && e.equipKind) || 'shoe';
+    let venueKind = (e && e.venueKind) || 'court';
     const venueOpts = [`<option value="">未指定</option>`]
       .concat(state().venues.map(v => `<option value="${v.id}">${esc(v.name)}</option>`)).join('');
     const remindToggle = `
@@ -420,10 +564,60 @@
             <div class="hint" style="margin-bottom:12px">耗材配件每条独立成行、各自填名称；这里的数量只作展示，不会再自动累加</div>`;
 
         } else if (cat === 'venue') {
-          nameLabel.textContent = '名称（场地费）';
+          nameLabel.textContent = '名称（场地费 / 包）';
+          const isPack = !!(e && e.isPackage);
           extra.innerHTML = `
-            <div class="field"><label>金额 ¥</label>
-              <input type="number" inputmode="decimal" class="input" id="xAmount" placeholder="0" value="${e && e.amount ? e.amount : ''}"></div>`;
+            <div class="field"><label>场地类型</label>
+              <div class="segmented" id="vKind">
+                <button type="button" data-k="court" class="${venueKind !== 'machine' ? 'on' : ''}">场地</button>
+                <button type="button" data-k="machine" class="${venueKind === 'machine' ? 'on' : ''}">发球机</button>
+              </div></div>
+            <div class="field"><label>场馆</label>
+              <select class="input" id="fVenue">${venueOptsNew(e ? e.venueId : '')}</select></div>
+            <div class="switch-row"><div><div class="t">预付包（按时长 / 次数扣减）</div><div class="d">关：单次场地费；开：买包后逐次自动扣</div></div>
+              <div class="switch" id="fVenuePack"></div></div>
+            <div id="fVenuePackFields" style="display:${isPack ? '' : 'none'}">
+              <div class="field-row">
+                <div class="field"><label>总时长 / 总次数</label>
+                  <input type="number" inputmode="decimal" class="input" id="vTotalUnits" placeholder="0" value="${e && e.totalUnits ? e.totalUnits : 20}"></div>
+                <div class="field"><label>单位</label>
+                  <select class="input" id="vPackUnit">
+                    ${['小时', '次', '节'].map(u => `<option value="${u}" ${(e && e.packUnit || '小时') === u ? 'selected' : ''}>${u}</option>`).join('')}
+                  </select></div>
+              </div>
+              <div class="field"><label>包总价 ¥</label>
+                <input type="number" inputmode="decimal" class="input" id="vTotalPrice" placeholder="0" value="${e && e.totalPrice ? e.totalPrice : ''}"></div>
+              <div class="field"><label>单价</label>
+                <div class="hint" id="vUnitPrice">—</div></div>
+            </div>
+            <div id="fVenueSingle" style="display:${isPack ? 'none' : ''}">
+              <div class="field"><label>金额 ¥</label>
+                <input type="number" inputmode="decimal" class="input" id="xAmount" placeholder="0" value="${e && e.amount ? e.amount : ''}"></div>
+            </div>`;
+          root.querySelectorAll('#vKind button').forEach(b => b.addEventListener('click', () => {
+            venueKind = b.dataset.k;
+            root.querySelectorAll('#vKind button').forEach(x => x.classList.toggle('on', x === b));
+          }));
+          const packSw = root.querySelector('#fVenuePack');
+          if (isPack) packSw.classList.add('on');
+          packSw.addEventListener('click', () => {
+            const on = packSw.classList.toggle('on');
+            root.querySelector('#fVenuePackFields').style.display = on ? '' : 'none';
+            root.querySelector('#fVenueSingle').style.display = on ? 'none' : '';
+            upPrice();
+          });
+          function upPrice() {
+            const tu = parseFloat(root.querySelector('#vTotalUnits').value) || 0;
+            const tp = parseFloat(root.querySelector('#vTotalPrice').value) || 0;
+            root.querySelector('#vUnitPrice').textContent = tu > 0
+              ? `¥${DB.fmtMoney(tp / tu)} / ${root.querySelector('#vPackUnit').value}（总价 ÷ 总量自动算）`
+              : '填入总价与总量后自动算';
+          }
+          root.querySelector('#vTotalUnits').addEventListener('input', upPrice);
+          root.querySelector('#vTotalPrice').addEventListener('input', upPrice);
+          root.querySelector('#vPackUnit').addEventListener('change', upPrice);
+          upPrice();
+          bindVenueNew(root, 'fVenue', null);
 
         } else {
           nameLabel.textContent = '名称';
@@ -509,7 +703,23 @@
           payload.amount = editId ? DB.alacarteTotal(e) : 0;
 
         } else if (cat === 'venue') {
-          payload.amount = parseFloat(val('xAmount')) || 0;
+          payload.venueKind = venueKind;
+          payload.venueId = val('fVenue') || '';
+          const packOn = root.querySelector('#fVenuePack') && root.querySelector('#fVenuePack').classList.contains('on');
+          if (packOn) {
+            const tu = parseFloat(val('vTotalUnits')) || 0;
+            if (tu <= 0) { toast('请填写总时长 / 总次数'); return; }
+            payload.isPackage = true;
+            payload.totalUnits = tu;
+            payload.totalPrice = parseFloat(val('vTotalPrice')) || 0;
+            payload.amount = payload.totalPrice;
+            payload.packUnit = val('vPackUnit') || '小时';
+            payload.brand = '';
+            payload.subs = (e && e.subs) ? e.subs.slice() : [];
+          } else {
+            payload.isPackage = false;
+            payload.amount = parseFloat(val('xAmount')) || 0;
+          }
 
         } else if (cat === 'partner') {
           payload.amount = parseFloat(val('xAmount')) || 0;
@@ -581,30 +791,35 @@
       return;
     }
 
-    /* 课包：耗课（不填价格，课包已按总价计入） */
-    if (cat === 'package') {
-      const rem = DB.remainingLessons(e);
-      openSheet('追加耗课', `
+    /* 课包 / 场地包 / 发球机包：扣减（不填价格，包已按总价计入） */
+    if (cat === 'package' || (cat === 'venue' && e.isPackage)) {
+      const isVenue = cat === 'venue';
+      const pu = e.packUnit || (isVenue ? '次' : '节');
+      const rem = DB.remainingUnits(e);
+      openSheet(isEdit ? '编辑扣减' : (isVenue ? '追加扣包' : '追加耗课'), `
         <div class="field"><label>日期</label>
-          <input type="date" class="input" id="aDate" value="${today}"></div>
-        <div class="field"><label>本次消耗节数</label>
-          <input type="number" inputmode="numeric" class="input" id="aLessons" value="1" min="1"></div>
+          <input type="date" class="input" id="aDate" value="${cur ? (cur.date || today) : today}"></div>
+        <div class="field"><label>本次消耗（${pu}）</label>
+          <input type="number" inputmode="decimal" step="0.5" class="input" id="aUnits" value="${cur ? (cur.units != null ? cur.units : (cur.lessons || 1)) : 1}"></div>
         <div class="field"><label>备注</label>
-          <input class="input" id="aNote" placeholder="可选，如：正手课"></div>
-        <div class="hint" style="margin-bottom:14px">当前剩余 <b style="color:#A9C77E">${rem} 节</b>，保存后自动扣减（课包已按总价计入总花费，耗课无需再填价格）</div>
+          <input class="input" id="aNote" placeholder="可选" value="${cur ? esc(cur.note || '') : ''}"></div>
+        <div class="hint" style="margin-bottom:14px">当前剩余 <b style="color:#A9C77E">${rem} ${pu}</b>，保存后自动扣减（包已按总价计入总花费${isVenue ? '' : '，耗课无需再填价格'}）</div>
         <div class="form-actions">
           <button class="btn-lg ghost" data-close>取消</button>
-          <button class="btn-lg primary" id="aSave">确认耗课</button>
+          <button class="btn-lg primary" id="aSave">${isEdit ? '保存修改' : (isVenue ? '确认扣包' : '确认耗课')}</button>
         </div>`, (root) => {
         root.querySelector('#aSave').addEventListener('click', () => {
-          const lessons = parseFloat(root.querySelector('#aLessons').value) || 1;
-          if (lessons > DB.remainingLessons(e)) { toast('超出剩余节数'); return; }
-          DB.addSub(e.id, {
+          const amount = parseFloat(root.querySelector('#aUnits').value) || 0;
+          if (!isEdit && amount > DB.remainingUnits(e)) { toast(`超出剩余 ${pu}数`); return; }
+          const patch = {
             date: root.querySelector('#aDate').value || today,
-            lessons, note: root.querySelector('#aNote').value.trim()
-          });
+            units: amount,
+            lessons: isVenue ? 0 : amount,
+            note: root.querySelector('#aNote').value.trim()
+          };
+          if (isEdit) DB.updateSub(e.id, cur.id, patch); else DB.addSub(e.id, patch);
           closeSheet(); refresh();
-          toast(`已记录，本包还剩 ${DB.remainingLessons(e)} 节`);
+          toast(`已记录，本包剩 ${DB.remainingUnits(e)} ${pu}`);
         });
       });
       return;
@@ -747,6 +962,7 @@
   }
 
   let tipsExpanded = false;
+  let pendingReminderRid = null;
   function renderTechStat() {
     const s = state();
     const all = [];
@@ -763,7 +979,7 @@
     const show = tipsExpanded ? all : all.slice(0, 3);
     const typeLabel = t => (DB.LESSON_TYPES[t] || {}).label || '训练';
     box.innerHTML = show.map(a => `
-      <div class="tsum-row">
+      <div class="tsum-row" data-act="tsum-expand" title="点击展开 / 收起">
         <span class="tsum-date">${DB.fmtDateShort(a.date)}</span>
         <span class="tsum-type chip sm">${esc(typeLabel(a.type))}</span>
         <span class="tsum-text">${esc(a.text)}</span>
@@ -781,28 +997,93 @@
     const max = addDays(today, 7);
     const box = $('#reminderList');
     if (!box) return;
-    const list = (s.reminders || [])
+
+    const clubToVenue = {};
+    s.venues.forEach(v => { clubToVenue[v.name] = v.id; });
+    const lessonMatch = (date, type, venueId, person, keyName) => s.lessons.some(l =>
+      l.date === date && l.type === type &&
+      (l.venueId === venueId || (person && l.person === person) || (keyName && (l.note || '').includes(keyName)))
+    );
+
+    const items = [];
+
+    /* 手动提醒 */
+    (s.reminders || [])
       .filter(r => !r.done && r.date && r.date >= today && r.date <= max)
-      .sort((a, b) => (a.date || '') < (b.date || '') ? -1 : 1);
-    if (!list.length) {
+      .forEach(r => items.push({
+        manual: true, id: r.id, date: r.date, time: r.time || '', venueId: r.venueId || '',
+        person: r.note || '', keyName: r.note || '', note: r.note || '', type: 'class'
+      }));
+
+    /* 课包耗课 → 自动派生（date ≥ 今天） */
+    s.expenses.filter(e => e.isPackage && e.category === 'package').forEach(e => {
+      (e.subs || []).forEach(sb => {
+        if (sb.date < today || sb.date > max) return;
+        const venueId = clubToVenue[e.club] || '';
+        const keyName = e.name || '';
+        if (lessonMatch(sb.date, 'class', venueId, e.coach || '', keyName)) return;
+        items.push({
+          manual: false, src: 'pack', eid: e.id, sid: sb.id, date: sb.date, time: '',
+          venueId, person: e.coach || '', keyName, note: e.name || '课包', type: 'class'
+        });
+      });
+    });
+
+    /* 散买课流水 → 自动派生 */
+    s.expenses.filter(e => e.category === 'alacarte').forEach(e => {
+      (e.subs || []).forEach(sb => {
+        if (sb.date < today || sb.date > max) return;
+        const venueId = clubToVenue[e.club] || '';
+        const keyName = e.name || '';
+        if (lessonMatch(sb.date, 'class', venueId, e.coach || '', keyName)) return;
+        items.push({
+          manual: false, src: 'alacarte', eid: e.id, sid: sb.id, date: sb.date, time: '',
+          venueId, person: e.coach || '', keyName, note: e.name || '散买课', type: 'class'
+        });
+      });
+    });
+
+    /* 场地 / 发球机包消耗 → 自动派生 */
+    s.expenses.filter(e => e.isPackage && e.category === 'venue').forEach(e => {
+      (e.subs || []).forEach(sb => {
+        if (sb.date < today || sb.date > max) return;
+        const venueId = e.venueId || '';
+        const keyName = e.name || '';
+        if (lessonMatch(sb.date, 'class', venueId, '', keyName)) return;
+        items.push({
+          manual: false, src: 'venuePack', eid: e.id, sid: sb.id, date: sb.date, time: '',
+          venueId, person: '', keyName, note: e.name || (e.venueKind === 'machine' ? '发球机包' : '场地包'), type: 'class'
+        });
+      });
+    });
+
+    items.sort((a, b) => (a.date || '') < (b.date || '') ? -1 : 1);
+
+    if (!items.length) {
       box.innerHTML = '<div class="empty" style="padding:10px">未来 7 天暂无约好的课，点「＋ 添加」记一笔</div>';
       return;
     }
-    box.innerHTML = list.map(r => `
-      <div class="remind-item">
+
+    const prefillOf = it => encodeURIComponent(JSON.stringify({
+      rid: it.id, date: it.date, time: it.time, venueId: it.venueId, type: it.type, person: it.person, note: it.note
+    }));
+
+    box.innerHTML = items.map(it => `
+      <div class="remind-item ${it.manual ? '' : 'derived'}">
         <div class="ri-main">
-          <div class="ri-date">${esc(r.date)}<b>${r.time ? ' ' + esc(r.time) : ''}</b></div>
-          <div class="ri-meta">${r.venueId ? '📍 ' + esc(vmap[r.venueId] || '') : ''}${r.note ? (r.venueId ? ' · ' : '') + esc(r.note) : ''}</div>
+          <div class="ri-date">${esc(it.date)}<b>${it.time ? ' ' + esc(it.time) : ''}</b>${it.manual ? '' : '<span class="ri-tag">自动</span>'}</div>
+          <div class="ri-meta">${it.venueId ? '📍 ' + esc(vmap[it.venueId] || '') : ''}${it.note ? (it.venueId ? ' · ' : '') + esc(it.note) : ''}</div>
         </div>
-        <button class="ri-del" data-act="del-reminder" data-id="${r.id}">✕</button>
+        <div class="ri-actions">
+          <button class="ri-done" data-act="reminder-to-lesson" data-prefill="${prefillOf(it)}">✓ 记上课</button>
+          ${it.manual ? `<button class="ri-del" data-act="del-reminder" data-id="${it.id}">✕</button>` : ''}
+        </div>
       </div>`).join('');
   }
 
   function openReminderForm() {
     const s = state();
-    const venueOpts = [`<option value="">未指定</option>`]
-      .concat(s.venues.map(v => `<option value="${v.id}">${esc(v.name)}</option>`))
-      .join('');
+    const venueOpts = venueOptsNew('');
     const today = DB.todayStr();
     const max = addDays(today, 7);
     openSheet('添加上课提醒', `
@@ -820,6 +1101,7 @@
         <button class="btn-lg ghost" data-close>取消</button>
         <button class="btn-lg primary" id="rSave">保存</button>
       </div>`, (root) => {
+      bindVenueNew(root, 'rVenue', null);
       root.querySelector('#rSave').addEventListener('click', () => {
         const date = root.querySelector('#rDate').value;
         if (!date) { toast('请选择日期'); return; }
@@ -850,17 +1132,23 @@
 
   /* ------- 学习记录表单 ------- */
   let pendingFiles = [];
-  function openLessonForm(editId) {
-    const l = editId ? state().lessons.find(x => x.id === editId) : null;
+  function openLessonForm(editId, prefill) {
+    let l = editId ? state().lessons.find(x => x.id === editId) : null;
+    if (!l && prefill) {
+      l = {
+        date: prefill.date || DB.todayStr(), type: prefill.type || 'class',
+        venueId: prefill.venueId || '', person: prefill.person || '',
+        hours: 1, techPoints: [], tips: [], gains: '', cost: 0,
+        note: prefill.note || '', attachments: []
+      };
+    }
     const s = state();
     pendingFiles = [];
     let techSel = l ? [...(l.techPoints || [])] : [];
     let type = l ? l.type : 'class';
     let atts = l ? [...(l.attachments || [])] : [];
 
-    const venueOpts = [`<option value="">未指定</option>`]
-      .concat(s.venues.map(v => `<option value="${v.id}" ${l && l.venueId === v.id ? 'selected' : ''}>${esc(v.name)}</option>`))
-      .join('');
+    const venueOpts = venueOptsNew(l ? l.venueId : '');
 
     const courseOpts = [`<option value="">不关联</option>`]
       .concat(s.expenses.filter(e => e.category === 'package' || e.category === 'alacarte')
@@ -914,6 +1202,15 @@
         <div class="switch-row" style="padding-top:0">
           <div><div class="t">同时扣 1 节</div><div class="d">并计入该课包花费流水</div></div>
           <div class="switch" id="lDeduct"></div>
+        </div>
+      </div>
+
+      <div class="field" id="lPackWrap" style="display:none">
+        <label>同时扣包（可选）</label>
+        <select class="input" id="lPack"></select>
+        <div class="switch-row" style="padding-top:6px">
+          <div><div class="t" id="lPackT">扣包</div><div class="d">按本次时长自动计入消耗</div></div>
+          <div class="switch" id="lPackDeduct"></div>
         </div>
       </div>
 
@@ -1049,6 +1346,7 @@
       }
 
       root.querySelector('#lFiles').addEventListener('change', function () { addFiles(this.files); this.value = ''; });
+      bindVenueNew(root, 'lVenue', null);
       renderThumbs();
 
       const courseSel = root.querySelector('#lCourse');
@@ -1058,7 +1356,7 @@
         const e = state().expenses.find(x => x.id === courseSel.value);
         if (e && e.category === 'package') {
           deductWrap.style.display = '';
-          deductWrap.querySelector('.d').textContent = `本包还剩 ${DB.remainingLessons(e)} 节`;
+          deductWrap.querySelector('.d').textContent = `本包还剩 ${DB.remainingUnits(e)} 节`;
         } else {
           deductWrap.style.display = 'none';
           deduct = false;
@@ -1070,6 +1368,30 @@
       syncDeduct();
       const sw = root.querySelector('#lDeduct');
       if (sw) sw.addEventListener('click', function () { deduct = !deduct; this.classList.toggle('on', deduct); });
+
+      /* 自动扣包（B/S）：按训练类型列出相关预付包 */
+      const packWrap = root.querySelector('#lPackWrap');
+      const packSel = root.querySelector('#lPack');
+      const packT = root.querySelector('#lPackT');
+      let packDeduct = false;
+      function relevantPacks() {
+        const s = state();
+        if (type === 'machine') return s.expenses.filter(e => e.isPackage && e.category === 'venue' && e.venueKind === 'machine');
+        if (type === 'class') return s.expenses.filter(e => e.isPackage && e.category === 'package');
+        return s.expenses.filter(e => e.isPackage && e.category === 'venue' && e.venueKind !== 'machine');
+      }
+      function renderPackSelect() {
+        const packs = relevantPacks();
+        packT.textContent = '扣' + (type === 'machine' ? '发球机包' : type === 'class' ? '课包' : '场地包');
+        packSel.innerHTML = `<option value="">不扣</option>` + packs.map(e =>
+          `<option value="${e.id}">${esc(e.name)}（剩 ${DB.remainingUnits(e)} ${e.packUnit || (type === 'class' ? '节' : '小时')}）</option>`).join('');
+        packWrap.style.display = packs.length ? '' : 'none';
+      }
+      packSel.addEventListener('change', () => { packDeduct = !!packSel.value; });
+      root.querySelectorAll('#lType button').forEach(b => b.addEventListener('click', () => { setTimeout(renderPackSelect, 0); }));
+      renderPackSelect();
+      const psw = root.querySelector('#lPackDeduct');
+      if (psw) psw.addEventListener('click', function () { packDeduct = !packDeduct; this.classList.toggle('on', packDeduct); });
 
       root.querySelector('#lSave').addEventListener('click', async () => {
         const date = root.querySelector('#lDate').value || DB.todayStr();
@@ -1104,14 +1426,28 @@
 
         if (courseId && deduct) {
           const e = state().expenses.find(x => x.id === courseId);
-          if (e && e.category === 'package' && DB.remainingLessons(e) >= 1) {
-            DB.addSub(e.id, { date, lessons: 1, note: '训练记录同步扣课' });
+          if (e && e.category === 'package' && DB.remainingUnits(e) >= 1) {
+            DB.addSub(e.id, { date, units: 1, lessons: 1, note: '训练记录同步扣课' });
           } else if (e && e.category === 'alacarte') {
             /* 默认沿用上一次的课价，可在学费卡片里再改 */
             const last = (e.subs || []).slice(-1)[0];
             DB.addSub(e.id, { date, lessons: 1, price: Number(last && last.price) || 0, note: '训练记录同步' });
           }
         }
+
+        /* 自动扣包（B/S）：发球机包 / 课包 / 场地包 */
+        if (packDeduct && packSel.value) {
+          const pk = state().expenses.find(x => x.id === packSel.value);
+          const isVenuePack = pk && pk.category === 'venue';
+          const need = type === 'class' ? 1 : (Number(hours) || 0);
+          if (pk && DB.remainingUnits(pk) >= need) {
+            const units = type === 'class' ? 1 : (Number(hours) || 0);
+            const lessons = type === 'class' ? 1 : 0;
+            DB.addSub(pk.id, { date, units, lessons, note: '训练记录同步扣' });
+          }
+        }
+        /* Z：从提醒「记上课」进来时，保存后删掉那条手动提醒 */
+        if (pendingReminderRid) { DB.removeReminder(pendingReminderRid); pendingReminderRid = null; }
 
         closeSheet();
         refresh();
@@ -1242,6 +1578,16 @@
     const map = {};
     state().venues.forEach(v => (v.photos || []).forEach(p => map[p.id] = p));
     document.querySelectorAll('.v-thumbs [data-act="open-media"]').forEach(node => {
+      const img = node.querySelector('img');
+      if (!img || !map[node.dataset.id]) return;
+      DB.mediaURL(node.dataset.id).then(u => { if (u) img.src = u; });
+    });
+  }
+
+  function hydratePhotoWall() {
+    const map = {};
+    state().venues.forEach(v => (v.photos || []).forEach(p => map[p.id] = p));
+    document.querySelectorAll('.pw-thumb [data-act="open-media"]').forEach(node => {
       const img = node.querySelector('img');
       if (!img || !map[node.dataset.id]) return;
       DB.mediaURL(node.dataset.id).then(u => { if (u) img.src = u; });
@@ -1395,8 +1741,15 @@
     const typeOrder = [['class', '上课', ''], ['partner', '陪练', 'o'], ['machine', '发球机', 'b'], ['sparring', '球搭子', 'g']];
     const totalTypeH = typeOrder.reduce((a, x) => a + (typeDist[x[0]] || 0), 0) || 1;
 
-    /* 每小时成本 */
-    const costPerHour = st.totalH > 0 ? st.total / st.totalH : 0;
+    /* 每小时成本 = 实耗 ÷ 总时长（F：避免预付整包扭曲） */
+    const tech = state().settings.techLevel || '1.0';
+    const costPerHour = st.totalH > 0 ? st.consumed / st.totalH : 0;
+    /* 近 3 月每小时成本（U）：花费 ÷ 当月时长 */
+    const monthCphRows = Object.keys(months).filter(Boolean).sort().map(mk => {
+      const m = months[mk] || { exp: 0, lessons: [] };
+      const h = m.lessons.reduce((a, l) => a + (Number(l.hours) || 0), 0);
+      return { mk, h, exp: m.exp, cph: h > 0 ? m.exp / h : 0 };
+    }).slice(-3).map(o => `<div class="row-line"><span class="l">${DB.fmtMonth(o.mk)}</span><span class="r">¥${DB.fmtMoney(o.cph)}<small>/h</small></span></div>`).join('');
 
     /* 技术点偏科提醒 */
     const techMap = DB.techPointStats();
@@ -1424,19 +1777,22 @@
 
     $('#reportBody').innerHTML = `
       <div class="r-card">
-        <div class="r-title">花费构成 <span class="tag">总 ¥${DB.fmtMoney(st.total)}</span></div>
-        ${cats.map(c => barRow(c.k, c.v, Math.round(c.v / totalForPct * 100), c.cls)).join('') || '<div class="empty">暂无数据</div>'}
+        <div class="r-title">核心指标</div>
+        <div class="kv-grid">
+          <div class="kv"><div class="k">技术等级（自评）</div><div class="v">${esc(tech)}</div></div>
+          <div class="kv"><div class="k">累计网球时长</div><div class="v">${DB.fmtHours(st.totalH)}</div></div>
+        </div>
       </div>
 
       <div class="r-card">
-        <div class="r-title">关键指标</div>
-        <div class="kv-grid">
-          <div class="kv"><div class="k">累计网球总时长</div><div class="v">${DB.fmtHours(st.totalH)}</div></div>
-          <div class="kv"><div class="k">课包剩余</div><div class="v">${st.remaining} <small>节</small></div></div>
-          <div class="kv"><div class="k">上课 / 陪练</div><div class="v">${DB.fmtHours(st.classH)} <small>/ ${DB.fmtHours(st.partnerH)}</small></div></div>
-          <div class="kv"><div class="k">发球机 / 球搭子</div><div class="v">${DB.fmtHours(st.machineH)} <small>/ ${DB.fmtHours(st.sparringH)}</small></div></div>
-          <div class="kv"><div class="k">累计训练</div><div class="v">${s.lessons.length} <small>次</small></div></div>
+        <div class="r-grid4">
+          <div class="kv mini"><div class="k">总花费</div><div class="v">¥${DB.fmtMoney(st.total)}</div></div>
+          <div class="kv mini"><div class="k">课包剩余</div><div class="v">${st.remaining}<small>节</small></div></div>
+          <div class="kv mini"><div class="k">累计训练</div><div class="v">${s.lessons.length}<small>次</small></div></div>
+          <div class="kv mini"><div class="k">每小时成本</div><div class="v cph">¥${DB.fmtMoney(costPerHour)}<small>/h</small></div></div>
         </div>
+        <div class="r-sub">每小时成本 = 实耗 ¥${DB.fmtMoney(st.consumed)} ÷ ${DB.fmtHours(st.totalH)}</div>
+        ${monthCphRows ? `<div class="r-sub">近 3 月每小时成本</div>${monthCphRows}` : ''}
       </div>
 
       <div class="r-card">
@@ -1445,21 +1801,6 @@
           const h = typeDist[k] || 0;
           return barRowVal(label, DB.fmtHours(h), Math.round(h / totalTypeH * 100), cls);
         }).join('') || '<div class="empty">暂无训练记录</div>'}
-      </div>
-
-      <div class="r-card">
-        <div class="r-title">每小时成本 <span class="tag">总花费 ÷ 总时长</span></div>
-        <div class="kv-grid">
-          <div class="kv"><div class="k">综合每小时成本</div><div class="v" style="color:var(--orange-soft)">¥${DB.fmtMoney(costPerHour)}<small> / 小时</small></div></div>
-          <div class="kv"><div class="k">累计训练次数</div><div class="v">${s.lessons.length}<small> 次</small></div></div>
-        </div>
-        <div class="hint" style="margin-top:9px">按月每小时成本（花费 ÷ 当月时长）</div>
-        ${monthKeysAll.map(mk => {
-          const exp = (months[mk] && months[mk].exp) || 0;
-          const h = monthly[mk].hours;
-          const cph = h > 0 ? exp / h : 0;
-          return `<div class="row-line"><span class="l">${DB.fmtMonth(mk)}</span><span class="r">¥${DB.fmtMoney(cph)}<small>/h</small></span></div>`;
-        }).join('') || '<div class="empty" style="padding:8px">暂无记录</div>'}
       </div>
 
       <div class="r-card">
@@ -1894,6 +2235,19 @@
           renderTechStat();
           return;
         }
+        case 'tsum-expand': {
+          const trow = el.closest('.tsum-row');
+          if (trow) trow.classList.toggle('expanded');
+          return;
+        }
+        case 'reminder-to-lesson': {
+          let pf = {};
+          try { pf = JSON.parse(decodeURIComponent(el.dataset.prefill || '{}')); } catch (e) { pf = {}; }
+          if (pf.rid) pendingReminderRid = pf.rid;
+          openLessonForm(null, pf);
+          return;
+        }
+        case 'open-gallery': openGallery(); return;
       }
     }
 
