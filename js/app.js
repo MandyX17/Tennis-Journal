@@ -112,18 +112,20 @@
       return;
     }
 
-    /* 学习 / 报告页：技术等级 + 上课（上排 2 张），陪练 + 球搭子 + 发球机（下排 3 张）；两排总宽相等 */
+    /* 学习页：顶排 技术等级 + 总上课时长；下排 4 张（上课/陪练/球搭子/发球机） */
     if (currentTab !== 'expense') {
       $('#statGrid').innerHTML =
-        techCard +
-        tCard('上课时长', DB.fmtHours(st.classH), 'w3') +
-        tCard('陪练时长', DB.fmtHours(st.partnerH)) +
-        tCard('球搭子', DB.fmtHours(st.sparringH)) +
-        tCard('发球机', DB.fmtHours(st.machineH));
+        `<div class="stat-grid2">${techCard}${tCard('总上课时长', DB.fmtHours(st.totalH), 'w3')}</div>` +
+        `<div class="stat-subrow">` +
+          tCard('上课时长', DB.fmtHours(st.classH)) +
+          tCard('陪练时长', DB.fmtHours(st.partnerH)) +
+          tCard('球搭子', DB.fmtHours(st.sparringH)) +
+          tCard('发球机', DB.fmtHours(st.machineH)) +
+        `</div>`;
       return;
     }
 
-    /* 记账页：12 张卡 4×3 撑满（首排 总花费 / 技术等级 / 总时长，其余 9 张 3×3） */
+    /* 记账页：12 张卡（首排 总花费/技术等级/总时长 各占 1/3，其余 9 张 3×3） */
     const amt = (k, v, filter, cls, opts) => {
       const on = expenseFilter === filter ? ' on' : '';
       const sub = opts && opts.sub ? `<span class="sub">${opts.sub}</span>` : '';
@@ -134,16 +136,21 @@
         <span class="meta" aria-hidden="true">›</span>
       </div>`;
     };
-    const totalCard = `<div class="stat-card total" data-act="stat-filter" data-filter="all">
+    const totalCard = `<div class="stat-card total c2" data-act="stat-filter" data-filter="all">
         <span class="k">总花费</span>
         <span class="v"><span class="cur">¥</span>${DB.fmtMoney(st.total)}</span>
         <span class="sub consumed">实耗：¥${DB.fmtMoney(st.consumed)}</span>
         <span class="meta" aria-hidden="true">›</span>
       </div>`;
+    const techCardK = `<div class="stat-card tech c2" data-act="edit-tech">
+        <span class="k">技术等级</span>
+        <span class="v">${esc(tech)}<span class="edit">›</span></span>
+        <span class="meta">点击可修改</span>
+      </div>`;
     const venueSub = `场地 ¥${DB.fmtMoney(st.venueFeeCourt)} · 发球机 ¥${DB.fmtMoney(st.venueFeeMachine)}`;
     $('#statGrid').innerHTML = `
       ${totalCard}
-      ${techCard}
+      ${techCardK}
       ${tCard('总时长', DB.fmtHours(st.totalH))}
       ${amt('教练费', st.coach, 'coach', 'accent')}
       ${amt('装备费', st.equip, 'equipment')}
@@ -183,9 +190,13 @@
     if (!all.length) {
       return `<div class="photo-wall empty-top">还没有球场照片，去球场卡片点「＋ 照片」上传，这里会汇总成照片墙</div>`;
     }
-    const thumb = (p, i) => `<div class="pw-thumb" data-act="open-media" data-id="${p.id}"><img alt=""></div>`;
+    const thumb = (p, i) => {
+      const v = s.venues.find(x => (x.photos || []).some(pp => pp.id === p.id));
+      const ttl = v ? `${v.city ? '【' + v.city + '】' : ''}${v.name}` : '';
+      return `<div class="pw-thumb" data-act="open-media" data-id="${p.id}" title="${esc(ttl)}"><img alt=""></div>`;
+    };
     const preview = all.slice(0, 5).map(thumb).join('');
-    const more = all.length > 5
+    const more = all.length >= 5
       ? `<button class="pw-more" data-act="open-gallery">更多 ${all.length - 5} 张 ▾</button>` : '';
     return `<div class="photo-wall">
       <div class="pw-row">${preview}${more}</div>
@@ -256,7 +267,8 @@
         if (kind && kind.label !== e.name) chips += `<span class="chip blue sm">${esc(kind.label)}</span>`;
       } else if (e.category === 'consumable') {
         const q = DB.consumableQty(e);
-        if (q) amtSub = `${q} ${esc(e.unit || '')}`;
+        const n = (e.subs || []).length;
+        amtSub = `${q} 件 · ${n} 条`;
       } else if (e.category === 'alacarte') {
         const c = DB.alacarteCount(e);
         amtSub = `已上 ${c} 节`;
@@ -277,7 +289,7 @@
           accU += DB.subUnits(sb);
           map[sb.id] = { rem: DB.packTotalUnits(e) - accU };
         });
-        const editable = e.category === 'equipment' || e.category === 'alacarte' || (e.category === 'venue' && e.isPackage);
+        const editable = e.category === 'equipment' || e.category === 'alacarte' || e.category === 'consumable' || (e.category === 'venue' && e.isPackage);
         subsHTML = `<div class="subs">` + [...chrono].reverse().map(sb => {
           const m = map[sb.id];
           let txt = '';
@@ -288,6 +300,9 @@
           else if (e.category === 'alacarte') {
             txt = `一节课 · ¥${DB.fmtMoney(Number(sb.price) || 0)}`;
             if (sb.note) txt += ' · ' + esc(sb.note);
+          } else if (e.category === 'consumable') {
+            const q = Number(sb.qty) || 0, p = Number(sb.price) || 0;
+            txt = `${esc(sb.name || '耗材')} · ${q}${esc(sb.unit || '')} × ¥${DB.fmtMoney(p)} = ¥${DB.fmtMoney(q * p)}`;
           } else txt = sb.note || '记录';
           return `<div class="sub-row">
             <span class="dot"></span>
@@ -465,6 +480,9 @@
       }
 
       function renderExtra() {
+        /* 耗材会隐藏顶部「名称」，切换分类时先复位 */
+        const nameField = root.querySelector('#fName');
+        if (nameField) nameField.closest('.field').style.display = '';
         if (cat === 'equipment') {
           nameLabel.textContent = '名称（装备总称，如网球鞋）';
           extra.innerHTML = `
@@ -548,20 +566,24 @@
             ${remindToggle}`;
 
         } else if (cat === 'consumable') {
-          nameLabel.textContent = '名称（每条耗材单独一条）';
+          /* 耗材：主表单只选「大类」，明细在卡片上逐条追加 */
+          nameLabel.textContent = '耗材大类';
+          const nameField = root.querySelector('#fName');
+          if (nameField) nameField.closest('.field').style.display = 'none';
+          const groups = ['球', '网球线', '手胶', '袜子', '护具', '服装', '配件', '其他'];
           extra.innerHTML = `
-            <div class="field-row">
-              <div class="field"><label>价格 ¥</label>
-                <input type="number" inputmode="decimal" class="input" id="cPrice" placeholder="0" value="${e && e.amount ? e.amount : ''}"></div>
-              <div class="field"><label>数量（可选）</label>
-                <input type="number" inputmode="decimal" class="input" id="cQty" placeholder="如 3" value="${e && e.qty ? e.qty : ''}"></div>
-            </div>
-            <div class="field"><label>单位（可选）</label>
-              <select class="input" id="cUnit">
-                <option value="">不填</option>
-                ${DB.UNITS.map(u => `<option value="${u}" ${e && e.unit === u ? 'selected' : ''}>${u}</option>`).join('')}
+            <div class="field"><label>耗材大类</label>
+              <select class="input" id="cGroup">
+                ${groups.map(g => `<option value="${g}" ${e && e.name === g ? 'selected' : ''}>${g}</option>`).join('')}
+                <option value="__custom" ${e && e.name && !groups.includes(e.name) ? 'selected' : ''}>自定义…</option>
               </select></div>
-            <div class="hint" style="margin-bottom:12px">耗材配件每条独立成行、各自填名称；这里的数量只作展示，不会再自动累加</div>`;
+            <div class="field" id="cGroupCustomWrap" style="display:${e && e.name && !groups.includes(e.name) ? '' : 'none'}">
+              <label>自定义大类名称</label>
+              <input class="input" id="cGroupCustom" placeholder="如：护腕" value="${e && e.name && !groups.includes(e.name) ? esc(e.name) : ''}"></div>
+            <div class="hint" style="margin-bottom:12px">大类确定后，点卡片上的「＋ 追加明细」逐条填名称 / 数量 / 单价；总额按各条自动累加</div>`;
+          root.querySelector('#cGroup').addEventListener('change', ev => {
+            root.querySelector('#cGroupCustomWrap').style.display = ev.target.value === '__custom' ? '' : 'none';
+          });
 
         } else if (cat === 'venue') {
           nameLabel.textContent = '名称（场地费 / 包）';
@@ -645,7 +667,8 @@
 
       root.querySelector('#fSave').addEventListener('click', () => {
         const name = root.querySelector('#fName').value.trim();
-        if (!name) { toast('请填写名称'); return; }
+        /* 耗材的名称来自「大类」下拉，不校验顶部名称 */
+        if (cat !== 'consumable' && !name) { toast('请填写名称'); return; }
         const dateMonth = root.querySelector('#fMonth').value || DB.monthKey(DB.todayStr());
         const note = root.querySelector('#fNote').value.trim();
         const payload = { category: cat, name, note, dateMonth };
@@ -684,16 +707,11 @@
           payload.coach = val('pCoach');
 
         } else if (cat === 'consumable') {
-          const cPrice = parseFloat(val('cPrice')) || 0;
-          const cQty = parseFloat(val('cQty')) || 0;
-          const cUnit = val('cUnit');
-          const subs = (editId && e && e.subs) ? e.subs.slice() : [];
-          const newSub = { id: DB.uid('s'), name, qty: cQty, unit: cUnit, price: cPrice, date: DB.todayStr() };
-          if (subs.length) subs[0] = newSub; else subs.push(newSub);
-          payload.subs = subs;
-          payload.amount = cPrice;
-          payload.qty = cQty;
-          payload.unit = cUnit;
+          const grp = val('cGroup');
+          const grpName = grp === '__custom' ? (val('cGroupCustom') || '耗材') : grp;
+          payload.subs = (editId && e && e.subs) ? e.subs.slice() : [];
+          payload.amount = editId ? DB.expenseTotal(e) : 0;
+          payload.name = grpName;
           payload.brand = '';
 
         } else if (cat === 'alacarte') {
@@ -877,11 +895,27 @@
           <div class="field"><label>日期</label>
             <input type="date" class="input" id="cDate" value="${cur ? (cur.date || today) : today}"></div>
         </div>
-        <div class="hint" style="margin-bottom:14px">已录入 <b style="color:#E0D9C6">${subs.length}</b> 条明细，当前总额 <b style="color:#A9C77E">¥${DB.fmtMoney(DB.expenseTotal(e))}</b>，保存后自动累进</div>
+        <div class="hint" style="margin-bottom:8px">已录入 <b style="color:#E0D9C6">${subs.length}</b> 条明细</div>
+        <div class="hint" id="cPrev" style="margin-bottom:14px;color:#CBD6BC"></div>
         <div class="form-actions">
           <button class="btn-lg ghost" data-close>取消</button>
           <button class="btn-lg primary" id="aSave">${isEdit ? '保存修改' : '确认追加'}</button>
         </div>`, (root) => {
+        function upPrev() {
+          const q = parseFloat(root.querySelector('#cQty').value) || 0;
+          const p = parseFloat(root.querySelector('#cPrice').value) || 0;
+          const u = root.querySelector('#cUnit').value;
+          const thisOne = q * p;
+          const base = DB.expenseTotal(e);
+          const proj = isEdit
+            ? base - (Number(cur.qty) || 0) * (Number(cur.price) || 0) + thisOne
+            : base + thisOne;
+          root.querySelector('#cPrev').innerHTML =
+            `本次 <b style="color:#A9C77E">${q}${esc(u)} × ¥${DB.fmtMoney(p)} = ¥${DB.fmtMoney(thisOne)}</b> · 本项将累计 <b style="color:#A9C77E">¥${DB.fmtMoney(proj)}</b>`;
+        }
+        root.querySelector('#cQty').addEventListener('input', upPrev);
+        root.querySelector('#cPrice').addEventListener('input', upPrev);
+        upPrev();
         root.querySelector('#aSave').addEventListener('click', () => {
           const name = root.querySelector('#cName').value.trim();
           const price = parseFloat(root.querySelector('#cPrice').value) || 0;
@@ -912,7 +946,10 @@
   function renderLearn() {
     const s = state();
     const st = DB.computeStats();
-    $('#learnMeta').textContent = `累计 ${DB.fmtHours(st.totalH)} · 上课 ${DB.fmtHours(st.classH)} / 陪练 ${DB.fmtHours(st.partnerH)} / 发球机 ${DB.fmtHours(st.machineH)} / 球搭子 ${DB.fmtHours(st.sparringH)}`;
+    const thisMonth = DB.monthKey(DB.todayStr());
+    const ml = s.lessons.filter(l => DB.monthKey(l.date) === thisMonth);
+    const sumH = (arr, type) => DB.fmtHours(arr.filter(l => l.type === type).reduce((a, l) => a + (Number(l.hours) || 0), 0));
+    $('#learnMeta').textContent = `本月 · 上课 ${sumH(ml, 'class')} / 陪练 ${sumH(ml, 'partner')} / 发球机 ${sumH(ml, 'machine')} / 球搭子 ${sumH(ml, 'sparring')}`;
 
     const venueMap = {};
     s.venues.forEach(v => venueMap[v.id] = v.name);
@@ -941,7 +978,9 @@
         ${l.tips && l.tips.length ? `<div class="tips-list">${l.tips.map(t => `<div class="tip-line"><span class="tip-dot">•</span>${esc(t.text)}</div>`).join('')}</div>` : ''}
         ${atts.length ? `<div class="thumbs">${atts.map(a => `
           <div class="thumb" data-act="open-media" data-id="${a.id}">
-            ${a.type === 'video' ? `<div class="play">▶</div><div class="vtag">视频</div>` : `<img alt="">`}
+            ${a.type === 'video'
+              ? `<div class="play">▶</div><img alt="" data-poster="${a.poster || ''}">`
+              : `<img alt="">`}
           </div>`).join('')}</div>` : ''}
         <div class="item-actions">
           <button class="mini-btn" data-act="edit-lesson" data-id="${l.id}">编辑</button>
@@ -1117,16 +1156,73 @@
     });
   }
 
+  /* 视频：抓取首帧生成封面图（懒生成，旧视频也能补封面） */
+  function videoPosterBlob(file) {
+    return new Promise(resolve => {
+      const v = document.createElement('video');
+      v.muted = true; v.playsInline = true; v.preload = 'auto';
+      const url = URL.createObjectURL(file);
+      v.src = url;
+      let done = false;
+      const finish = (b) => { if (done) return; done = true; try { URL.revokeObjectURL(url); } catch (e) {} resolve(b); };
+      v.onloadedmetadata = () => { try { v.currentTime = 0.1; } catch (e) {} };
+      v.onseeked = () => {
+        try {
+          const c = document.createElement('canvas');
+          c.width = v.videoWidth || 320; c.height = v.videoHeight || 180;
+          c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+          c.toBlob(b => finish(b), 'image/jpeg', 0.7);
+        } catch (e) { finish(null); }
+      };
+      v.onerror = () => finish(null);
+      setTimeout(() => finish(null), 4000);
+    });
+  }
+  async function ensurePoster(att, img) {
+    try {
+      const blob = await DB.media.get(att.id);
+      if (!blob) return;
+      const v = document.createElement('video');
+      v.muted = true; v.preload = 'auto';
+      const url = URL.createObjectURL(blob);
+      v.src = url;
+      v.onloadedmetadata = () => { try { v.currentTime = 0.1; } catch (e) {} };
+      v.onseeked = () => {
+        try {
+          const c = document.createElement('canvas');
+          c.width = v.videoWidth || 320; c.height = v.videoHeight || 180;
+          c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+          c.toBlob(async b => {
+            if (b) {
+              const pid = DB.uid('m');
+              await DB.media.put(pid, b);
+              att.poster = pid; DB.save();
+              const pu = URL.createObjectURL(b);
+              if (img) img.src = pu;
+            }
+            URL.revokeObjectURL(url);
+          }, 'image/jpeg', 0.7);
+        } catch (e) { URL.revokeObjectURL(url); }
+      };
+      v.onerror = () => URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (e) {}
+  }
+
   function hydrateThumbs() {
     const s = state();
     const map = {};
     s.lessons.forEach(l => (l.attachments || []).forEach(a => map[a.id] = a));
     document.querySelectorAll('[data-act="open-media"]').forEach(node => {
       const att = map[node.dataset.id];
-      if (!att || att.type === 'video') return;
+      if (!att) return;
       const img = node.querySelector('img');
-      if (!img) return;
-      DB.mediaURL(att.id).then(url => { if (url) img.src = url; });
+      if (att.type === 'video') {
+        if (att.poster) { if (img) DB.mediaURL(att.poster).then(u => { if (u) img.src = u; }); }
+        else ensurePoster(att, img);
+      } else {
+        if (img) DB.mediaURL(att.id).then(url => { if (url) img.src = url; });
+      }
     });
   }
 
@@ -1299,11 +1395,13 @@
         const box = root.querySelector('#lThumbs');
         box.innerHTML =
           atts.map(a => `<div class="thumb" data-act="open-media" data-id="${a.id}">
-            ${a.type === 'video' ? `<div class="play">▶</div><div class="vtag">视频</div>` : `<img alt="">`}
+            ${a.type === 'video'
+              ? `<div class="play">▶</div>${a.poster ? `<img alt="" data-poster="${a.poster}">` : ''}`
+              : `<img alt="">`}
             <button class="del" data-act="rm-att" data-id="${a.id}" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,.6);border-radius:50%;width:18px;height:18px;font-size:10px;color:#fff">✕</button>
           </div>`).join('') +
           pendingFiles.map((p, i) => `<div class="thumb">
-            ${p.type === 'video' ? `<div class="play">▶</div><div class="vtag">视频</div>` : `<img src="${p.url}" alt="">`}
+            ${p.type === 'video' ? `<div class="play">▶</div>` : `<img src="${p.url}" alt="">`}
             <button data-act="rm-pending" data-i="${i}" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,.6);border-radius:50%;width:18px;height:18px;font-size:10px;color:#fff">✕</button>
           </div>`).join('') +
           `<label class="thumb add">＋<input type="file" id="lFiles2" accept="image/*,video/*" multiple hidden></label>`;
@@ -1330,8 +1428,12 @@
         atts.forEach(a => map[a.id] = a);
         root.querySelectorAll('#lThumbs [data-act="open-media"]').forEach(node => {
           const att = map[node.dataset.id];
-          if (!att || att.type === 'video') return;
+          if (!att) return;
           const img = node.querySelector('img');
+          if (att.type === 'video') {
+            if (att.poster && img) DB.mediaURL(att.poster).then(u => { if (u) img.src = u; });
+            return;
+          }
           if (!img) return;
           DB.mediaURL(att.id).then(u => { if (u) img.src = u; });
         });
@@ -1412,7 +1514,16 @@
           for (const p of pendingFiles) {
             const id = DB.uid('m');
             await DB.media.put(id, p.file);
-            atts.push({ id, type: p.type, name: p.file.name, size: p.file.size, mime: p.file.type });
+            const att = { id, type: p.type, name: p.file.name, size: p.file.size, mime: p.file.type };
+            if (p.type === 'video') {
+              const poster = await videoPosterBlob(p.file);
+              if (poster) {
+                const pid = DB.uid('m');
+                await DB.media.put(pid, poster);
+                att.poster = pid;
+              }
+            }
+            atts.push(att);
           }
         } catch (err) {
           console.error(err);
@@ -1538,14 +1649,16 @@
   function renderVenues() {
     const s = state();
     const vs = DB.venueStats();
-    $('#venueMeta').textContent = `共 ${s.venues.length} 家 · 自动统计次数与时长`;
+    const cityCount = new Set(s.venues.map(v => v.city).filter(Boolean)).size;
+    $('#venueMeta').textContent = `共 ${s.venues.length} 家 · 打卡 ${cityCount} 城`;
 
+    const vName = v => `${v.city ? '【' + esc(v.city) + '】' : ''}${esc(v.name)}`;
     $('#venueList').innerHTML = s.venues.map(v => {
       const st = vs[v.id] || { count: 0, hours: 0, cost: 0, last: '' };
       return `<div class="card item venue">
         <div class="v-head">
           <div style="flex:1;min-width:0">
-            <div class="v-name">${esc(v.name)}</div>
+            <div class="v-name">${vName(v)}</div>
             <div class="stars">${starsHTML(v.rating || 0)}</div>
           </div>
           <div class="item-right">
@@ -1587,7 +1700,7 @@
   function hydratePhotoWall() {
     const map = {};
     state().venues.forEach(v => (v.photos || []).forEach(p => map[p.id] = p));
-    document.querySelectorAll('.pw-thumb [data-act="open-media"]').forEach(node => {
+    document.querySelectorAll('.pw-thumb').forEach(node => {
       const img = node.querySelector('img');
       if (!img || !map[node.dataset.id]) return;
       DB.mediaURL(node.dataset.id).then(u => { if (u) img.src = u; });
@@ -1630,6 +1743,9 @@
     openSheet(editId ? '编辑球场' : '新增球场', `
       <div class="field"><label>名称</label>
         <input class="input" id="vName" placeholder="如 东风9号球场" value="${v ? esc(v.name) : ''}"></div>
+      <div class="field"><label>城市</label>
+        <input class="input" id="vCity" list="cityList" placeholder="如 北京 / 上海" value="${v ? esc(v.city || '') : ''}">
+        <datalist id="cityList">${[...new Set(s.venues.map(x => x.city).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
       <div class="field"><label>地址</label>
         <input class="input" id="vAddr" placeholder="可选" value="${v ? esc(v.address || '') : ''}"></div>
       <div class="field"><label>场地类型（可多选）</label>
@@ -1669,6 +1785,7 @@
         const payload = {
           name,
           address: root.querySelector('#vAddr').value.trim(),
+          city: root.querySelector('#vCity').value.trim(),
           types,
           fee: parseFloat(root.querySelector('#vFee').value) || 0,
           rating,
