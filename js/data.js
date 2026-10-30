@@ -252,9 +252,18 @@
     s.venues.forEach(v => {
       if (!Array.isArray(v.photos)) v.photos = [];
       if (!Array.isArray(v.types)) v.types = [];
+      /* 城市字段归一：名称里已有的【xx】剥离进 city，避免重复前缀 */
+      if (!v.city && v.name) {
+        const m = (v.name || '').match(/^【(.+?)】/);
+        if (m) { v.city = m[1]; v.name = v.name.slice(m[0].length).trim(); }
+      }
     });
     s.expenses.forEach(e => {
       if (!Array.isArray(e.subs)) e.subs = [];
+      /* 发球机包归并：名称含「发球机」的场地类支出自动标记为 machine，并入发球机统计 */
+      if (e.category === 'venue' && e.venueKind !== 'machine' && /发球机/.test(e.name || '')) {
+        e.venueKind = 'machine';
+      }
       if (!e.dateMonth) e.dateMonth = '2026-10';
       if (!e.date) {
         /* Y：装备缺日期默认统一写当月 15 号（10.15）；其余兜底月初 */
@@ -385,9 +394,9 @@
   function alacarteTotal(e) {
     return (e.subs || []).reduce((a, s) => a + (Number(s.price) || Number(s.amount) || 0), 0);
   }
-  /* 耗材配件：总额 = 各明细价格之和（有明细时） */
+  /* 耗材配件：总件数 = 各明细数量之和（qty 缺省按 1） */
   function consumableQty(e) {
-    return (e.subs || []).length;
+    return (e.subs || []).reduce((a, s) => a + (Number(s.qty) || 0), 0);
   }
   /* 装备：总价 = 各次采购实例价格之和 */
   function equipSum(e) {
@@ -417,7 +426,7 @@
         return equipSum(e);
       case 'consumable':
         return (e.subs && e.subs.length)
-          ? e.subs.reduce((a, s) => a + (Number(s.price) || 0), 0)
+          ? e.subs.reduce((a, s) => a + (Number(s.qty) || 0) * (Number(s.price) || 0), 0)
           : (Number(e.amount) || 0);
       default:
         return Number(e.amount) || 0;
@@ -439,6 +448,11 @@
     if (e.category === 'venue') {
       if (e.isPackage) return consumedUnits(e) * packageUnitPrice(e);
       return (e.date && e.date <= today) ? (Number(e.amount) || 0) : 0;
+    }
+    if (e.category === 'consumable') {
+      /* 实耗按每条明细日期：仅 date ≤ 今天的 数量×单价 计入 */
+      return (e.subs || []).reduce((a, s) =>
+        a + ((s.date && s.date <= today) ? (Number(s.qty) || 0) * (Number(s.price) || 0) : 0), 0);
     }
     return (e.date && e.date <= today) ? expenseTotal(e) : 0;
   }
@@ -651,7 +665,7 @@
 
   function addVenue(payload) {
     const v = Object.assign({
-      id: uid('v'), createdAt: Date.now(), name: '', address: '',
+      id: uid('v'), createdAt: Date.now(), name: '', address: '', city: '',
       types: [], fee: 0, rating: 0, review: '', note: ''
     }, payload);
     state.venues.push(v);
