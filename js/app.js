@@ -148,14 +148,13 @@
         <span class="v">${esc(tech)}<span class="edit">›</span></span>
         <span class="meta">点击可修改</span>
       </div>`;
-    const venueSub = `场地 ¥${DB.fmtMoney(st.venueFeeCourt)} · 发球机 ¥${DB.fmtMoney(st.venueFeeMachine)}`;
     $('#statGrid').innerHTML = `
       ${totalCard}
       ${techCardK}
       ${tCard('总时长', DB.fmtHours(st.totalH))}
       ${amt('教练费', st.coach, 'coach', 'accent', { consumed: st.coachConsumed })}
       ${amt('装备费', st.equip, 'equipment')}
-      ${amt('场地费', st.venueFee, 'venue', '', { sub: venueSub, consumed: st.venueConsumed })}
+      ${amt('场地费', st.venueFee, 'venue', '', { consumed: st.venueConsumed })}
       ${amt('耗材费', st.consum, 'consumable')}
       ${amt('陪练费', st.partnerFee, 'partner')}
       ${tCard('上课时长', DB.fmtHours(st.classH))}
@@ -960,7 +959,7 @@
         ${atts.length ? `<div class="thumbs">${atts.map(a => `
           <div class="thumb" data-act="open-media" data-id="${a.id}">
             ${a.type === 'video'
-              ? `<div class="play">▶</div><img alt="" data-poster="${a.poster || ''}">`
+              ? `<div class="play">▶</div><video class="vthumb" muted playsinline preload="auto"></video>`
               : `<img alt="">`}
           </div>`).join('')}</div>` : ''}
         <div class="item-actions">
@@ -1031,7 +1030,7 @@
     (s.reminders || [])
       .filter(r => !r.done && r.date && r.date >= today && r.date <= max)
       .forEach(r => items.push({
-        manual: true, id: r.id, date: r.date, time: r.time || '', venueId: r.venueId || '',
+        manual: true, id: r.id, date: r.date, time: r.time || '', timeEnd: r.timeEnd || '', venueId: r.venueId || '',
         person: r.note || '', keyName: r.note || '', note: r.note || '', type: 'class'
       }));
 
@@ -1044,7 +1043,7 @@
         const keyName = e.name || '';
         if (lessonMatch(sb.date, 'class', venueId, e.coach || '', keyName)) return;
         items.push({
-          manual: false, src: 'pack', eid: e.id, sid: sb.id, date: sb.date, time: sb.time || '',
+          manual: false, src: 'pack', eid: e.id, sid: sb.id, date: sb.date, time: sb.time || '', timeEnd: sb.timeEnd || '',
           venueId, person: e.coach || '', keyName, note: e.name || '课包', type: 'class'
         });
       });
@@ -1059,7 +1058,7 @@
         const keyName = e.name || '';
         if (lessonMatch(sb.date, 'class', venueId, e.coach || '', keyName)) return;
         items.push({
-          manual: false, src: 'alacarte', eid: e.id, sid: sb.id, date: sb.date, time: sb.time || '',
+          manual: false, src: 'alacarte', eid: e.id, sid: sb.id, date: sb.date, time: sb.time || '', timeEnd: sb.timeEnd || '',
           venueId, person: e.coach || '', keyName, note: e.name || '散买课', type: 'class'
         });
       });
@@ -1074,7 +1073,7 @@
         const keyName = e.name || '';
         if (lessonMatch(sb.date, 'class', venueId, '', keyName)) return;
         items.push({
-          manual: false, src: 'venuePack', eid: e.id, sid: sb.id, date: sb.date, time: sb.time || '',
+          manual: false, src: 'venuePack', eid: e.id, sid: sb.id, date: sb.date, time: sb.time || '', timeEnd: sb.timeEnd || '',
           venueId, person: '', keyName, note: e.name || (e.venueKind === 'machine' ? '发球机包' : '场地包'), type: 'class'
         });
       });
@@ -1095,13 +1094,14 @@
       rid: it.manual ? it.id : '',
       eid: it.manual ? '' : it.eid,
       sid: it.manual ? '' : it.sid,
-      manual: it.manual, date: it.date, time: it.time, venueId: it.venueId, type: it.type, person: it.person, note: it.note
+      manual: it.manual, date: it.date, time: it.time, timeEnd: it.timeEnd || '',
+      venueId: it.venueId, type: it.type, person: it.person, note: it.note
     }));
 
     box.innerHTML = items.map(it => `
       <div class="remind-item ${it.manual ? '' : 'derived'}" data-id="${it.manual ? it.id : ''}" data-eid="${it.manual ? '' : it.eid}" data-sid="${it.manual ? '' : it.sid}">
         <div class="ri-main" data-act="reminder-toggle">
-          <div class="ri-date">${esc(it.date)}<b>${it.time ? ' ' + esc(it.time) : ''}</b>${it.manual ? '' : '<span class="ri-tag">自动</span>'}</div>
+          <div class="ri-date">${esc(it.date)}<b>${it.time ? ' ' + esc(it.time) : ''}${it.timeEnd ? '-' + esc(it.timeEnd) : ''}</b>${it.manual ? '' : '<span class="ri-tag">自动</span>'}</div>
           <div class="ri-meta">${it.venueId ? '📍 ' + esc(vmap[it.venueId] || '') : ''}${it.note ? (it.venueId ? ' · ' : '') + esc(it.note) : ''}</div>
         </div>
         <div class="ri-actions">
@@ -1110,10 +1110,13 @@
         </div>
         <div class="ri-edit">
           <div class="field-row">
-            <div class="field"><label>日期</label><input type="date" class="input" value="${esc(it.date)}" ${it.manual ? '' : 'disabled'}></div>
-            <div class="field"><label>时间</label><input type="time" class="input" value="${esc(it.time)}"></div>
+            <div class="field"><label>日期${it.manual ? '' : '（记账里改）'}</label><input type="date" class="input" data-f="date" value="${esc(it.date)}" ${it.manual ? '' : 'disabled'}></div>
           </div>
-          <button class="btn-ghost sm" data-act="reminder-save-edit">保存时间</button>
+          <div class="field-row" style="margin-top:8px">
+            <div class="field"><label>开始</label><input type="time" class="input" data-f="time" value="${esc(it.time)}"></div>
+            <div class="field"><label>结束</label><input type="time" class="input" data-f="timeEnd" value="${esc(it.timeEnd || '')}"></div>
+          </div>
+          <button class="btn-ghost sm" data-act="reminder-save-edit">保存</button>
         </div>
       </div>`).join('');
   }
@@ -1127,11 +1130,13 @@
       <div class="field"><label>日期（未来 7 天内）</label>
         <input type="date" class="input" id="rDate" min="${today}" max="${max}" value="${today}"></div>
       <div class="field-row">
-        <div class="field"><label>时间</label>
+        <div class="field"><label>开始</label>
           <input type="time" class="input" id="rTime" value="19:00"></div>
-        <div class="field"><label>场馆</label>
-          <select class="input" id="rVenue">${venueOpts}</select></div>
+        <div class="field"><label>结束</label>
+          <input type="time" class="input" id="rTimeEnd" value="20:00"></div>
       </div>
+      <div class="field"><label>场馆</label>
+        <select class="input" id="rVenue">${venueOpts}</select></div>
       <div class="field"><label>备注</label>
         <input class="input" id="rNote" placeholder="如：带拍 / 课前热身"></div>
       <div class="form-actions">
@@ -1146,6 +1151,7 @@
         DB.addReminder({
           date,
           time: root.querySelector('#rTime').value || '',
+          timeEnd: root.querySelector('#rTimeEnd').value || '',
           venueId: root.querySelector('#rVenue').value || '',
           note: root.querySelector('#rNote').value.trim() || ''
         });
@@ -1154,59 +1160,7 @@
     });
   }
 
-  /* 视频：抓取首帧生成封面图（懒生成，旧视频也能补封面） */
-  function videoPosterBlob(file) {
-    return new Promise(resolve => {
-      const v = document.createElement('video');
-      v.muted = true; v.playsInline = true; v.preload = 'auto';
-      const url = URL.createObjectURL(file);
-      v.src = url;
-      let done = false;
-      const finish = (b) => { if (done) return; done = true; try { URL.revokeObjectURL(url); } catch (e) {} resolve(b); };
-      v.onloadedmetadata = () => { try { v.currentTime = 0.1; } catch (e) {} };
-      v.onseeked = () => {
-        try {
-          const c = document.createElement('canvas');
-          c.width = v.videoWidth || 320; c.height = v.videoHeight || 180;
-          c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
-          c.toBlob(b => finish(b), 'image/jpeg', 0.7);
-        } catch (e) { finish(null); }
-      };
-      v.onerror = () => finish(null);
-      setTimeout(() => finish(null), 4000);
-    });
-  }
-  async function ensurePoster(att, img) {
-    try {
-      const blob = await DB.media.get(att.id);
-      if (!blob) return;
-      const v = document.createElement('video');
-      v.muted = true; v.preload = 'auto';
-      const url = URL.createObjectURL(blob);
-      v.src = url;
-      v.onloadedmetadata = () => { try { v.currentTime = 0.1; } catch (e) {} };
-      v.onseeked = () => {
-        try {
-          const c = document.createElement('canvas');
-          c.width = v.videoWidth || 320; c.height = v.videoHeight || 180;
-          c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
-          c.toBlob(async b => {
-            if (b) {
-              const pid = DB.uid('m');
-              await DB.media.put(pid, b);
-              att.poster = pid; DB.save();
-              const pu = URL.createObjectURL(b);
-              if (img) img.src = pu;
-            }
-            URL.revokeObjectURL(url);
-          }, 'image/jpeg', 0.7);
-        } catch (e) { URL.revokeObjectURL(url); }
-      };
-      v.onerror = () => URL.revokeObjectURL(url);
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-    } catch (e) {}
-  }
-
+  /* 视频封面：直接用 <video src="blobURL#t=0.5"> 渲染第 0.5 秒的帧，由浏览器解码，稳定不黑屏 */
   function hydrateThumbs() {
     const s = state();
     const map = {};
@@ -1214,11 +1168,14 @@
     document.querySelectorAll('[data-act="open-media"]').forEach(node => {
       const att = map[node.dataset.id];
       if (!att) return;
-      const img = node.querySelector('img');
       if (att.type === 'video') {
-        if (att.poster) { if (img) DB.mediaURL(att.poster).then(u => { if (u) img.src = u; }); }
-        else ensurePoster(att, img);
+        const vd = node.querySelector('video');
+        if (vd && !vd.dataset.ready) {
+          vd.dataset.ready = '1';
+          DB.mediaURL(att.id).then(u => { if (u) vd.src = u + '#t=0.5'; });
+        }
       } else {
+        const img = node.querySelector('img');
         if (img) DB.mediaURL(att.id).then(url => { if (url) img.src = url; });
       }
     });
@@ -1232,7 +1189,7 @@
       l = {
         date: prefill.date || DB.todayStr(), type: prefill.type || 'class',
         venueId: prefill.venueId || '', person: prefill.person || '',
-        hours: 1, techPoints: [], tips: [], gains: '', cost: 0,
+        hours: prefill.hours || 1, techPoints: [], tips: [], gains: '', cost: 0,
         note: prefill.note || '', time: prefill.time || '', attachments: []
       };
     }
@@ -1396,12 +1353,12 @@
         box.innerHTML =
           atts.map(a => `<div class="thumb" data-act="open-media" data-id="${a.id}">
             ${a.type === 'video'
-              ? `<div class="play">▶</div>${a.poster ? `<img alt="" data-poster="${a.poster}">` : ''}`
+              ? `<div class="play">▶</div><video class="vthumb" muted playsinline preload="auto"></video>`
               : `<img alt="">`}
             <button class="del" data-act="rm-att" data-id="${a.id}" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,.6);border-radius:50%;width:18px;height:18px;font-size:10px;color:#fff">✕</button>
           </div>`).join('') +
           pendingFiles.map((p, i) => `<div class="thumb">
-            ${p.type === 'video' ? `<div class="play">▶</div>` : `<img src="${p.url}" alt="">`}
+            ${p.type === 'video' ? `<div class="play">▶</div><video class="vthumb" muted playsinline preload="auto"${p.url ? ` src="${p.url}#t=0.5"` : ''}></video>` : `<img src="${p.url}" alt="">`}
             <button data-act="rm-pending" data-i="${i}" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,.6);border-radius:50%;width:18px;height:18px;font-size:10px;color:#fff">✕</button>
           </div>`).join('') +
           `<label class="thumb add">＋<input type="file" id="lFiles2" accept="image/*,video/*" multiple hidden></label>`;
@@ -1429,11 +1386,15 @@
         root.querySelectorAll('#lThumbs [data-act="open-media"]').forEach(node => {
           const att = map[node.dataset.id];
           if (!att) return;
-          const img = node.querySelector('img');
           if (att.type === 'video') {
-            if (att.poster && img) DB.mediaURL(att.poster).then(u => { if (u) img.src = u; });
+            const vd = node.querySelector('video');
+            if (vd && !vd.dataset.ready) {
+              vd.dataset.ready = '1';
+              DB.mediaURL(att.id).then(u => { if (u) vd.src = u + '#t=0.5'; });
+            }
             return;
           }
+          const img = node.querySelector('img');
           if (!img) return;
           DB.mediaURL(att.id).then(u => { if (u) img.src = u; });
         });
@@ -1442,7 +1403,7 @@
       function addFiles(fileList) {
         Array.from(fileList).forEach(f => {
           const isVideo = f.type.startsWith('video') || /\.(mov|mp4|m4v|webm)$/i.test(f.name);
-          pendingFiles.push({ file: f, type: isVideo ? 'video' : 'image', url: isVideo ? '' : URL.createObjectURL(f) });
+          pendingFiles.push({ file: f, type: isVideo ? 'video' : 'image', url: URL.createObjectURL(f) });
         });
         renderThumbs();
       }
@@ -1516,14 +1477,6 @@
             const id = DB.uid('m');
             await DB.media.put(id, p.file);
             const att = { id, type: p.type, name: p.file.name, size: p.file.size, mime: p.file.type };
-            if (p.type === 'video') {
-              const poster = await videoPosterBlob(p.file);
-              if (poster) {
-                const pid = DB.uid('m');
-                await DB.media.put(pid, poster);
-                att.poster = pid;
-              }
-            }
             atts.push(att);
           }
         } catch (err) {
@@ -2371,15 +2324,16 @@
         case 'reminder-save-edit': {
           const item = el.closest('.remind-item');
           if (!item) return;
-          const dateInput = item.querySelector('.ri-edit input[type="date"]');
-          const timeInput = item.querySelector('.ri-edit input[type="time"]');
-          const time = timeInput ? timeInput.value || '' : '';
+          const q = sel => { const n = item.querySelector(sel); return n ? (n.value || '') : ''; };
+          const time = q('.ri-edit [data-f="time"]');
+          const timeEnd = q('.ri-edit [data-f="timeEnd"]');
           const id = item.dataset.id, eid = item.dataset.eid, sid = item.dataset.sid;
           if (id) {
-            const date = dateInput ? dateInput.value || '' : '';
-            DB.updateReminder(id, { date, time });
+            const date = q('.ri-edit [data-f="date"]') || DB.todayStr();
+            DB.updateReminder(id, { date, time, timeEnd });
           } else if (eid && sid) {
-            DB.updateSub(eid, sid, { time });
+            /* 派生提醒：日期来自记账，这里只允许改时间区间 */
+            DB.updateSub(eid, sid, { time, timeEnd });
           }
           refresh(); toast('已更新上课时间');
           return;
@@ -2387,6 +2341,13 @@
         case 'reminder-to-lesson': {
           let pf = {};
           try { pf = JSON.parse(decodeURIComponent(el.dataset.prefill || '{}')); } catch (e) { pf = {}; }
+          /* 有开始+结束时间时，自动算出时长预填 */
+          if (pf.time && pf.timeEnd) {
+            const toMin = t => { const a = String(t).split(':'); return (Number(a[0]) || 0) * 60 + (Number(a[1]) || 0); };
+            let d = toMin(pf.timeEnd) - toMin(pf.time);
+            if (d < 0) d += 1440; /* 跨午夜 */
+            if (d > 0) pf.hours = Math.round(d / 60 * 100) / 100;
+          }
           pendingReminderInfo = { manual: !!pf.manual, rid: pf.rid || '', eid: pf.eid || '', sid: pf.sid || '' };
           openLessonForm(null, pf);
           return;
