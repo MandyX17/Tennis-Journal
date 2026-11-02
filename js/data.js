@@ -331,6 +331,7 @@
       if (!r.id) r.id = uid('r');
       r.date = r.date || '';
       r.time = r.time || '';
+      r.timeEnd = r.timeEnd || '';
       r.venueId = r.venueId || '';
       r.note = r.note || '';
     });
@@ -605,7 +606,7 @@
   /* ---------- 提醒 ---------- */
   function addReminder(payload) {
     const r = Object.assign({
-      id: uid('r'), createdAt: Date.now(), date: '', time: '', venueId: '', note: ''
+      id: uid('r'), createdAt: Date.now(), date: '', time: '', timeEnd: '', venueId: '', note: ''
     }, payload);
     state.reminders = state.reminders || [];
     state.reminders.push(r);
