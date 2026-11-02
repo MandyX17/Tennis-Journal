@@ -115,7 +115,7 @@
     /* 学习页：顶排 技术等级 + 总上课时长；下排 4 张（上课/陪练/球搭子/发球机） */
     if (currentTab !== 'expense') {
       $('#statGrid').innerHTML =
-        `<div class="stat-grid2">${techCard}${tCard('总上课时长', DB.fmtHours(st.totalH), 'w3')}</div>` +
+        `<div class="stat-grid2">${techCard}${tCard('总时长', DB.fmtHours(st.totalH), 'w3')}</div>` +
         `<div class="stat-subrow">` +
           tCard('上课时长', DB.fmtHours(st.classH)) +
           tCard('陪练时长', DB.fmtHours(st.partnerH)) +
@@ -129,17 +129,18 @@
     const amt = (k, v, filter, cls, opts) => {
       const on = expenseFilter === filter ? ' on' : '';
       const sub = opts && opts.sub ? `<span class="sub">${opts.sub}</span>` : '';
+      const cons = opts && opts.consumed != null ? `<span class="sub consumed">¥${DB.fmtMoney(opts.consumed)}</span>` : '';
       return `<div class="stat-card ${cls || ''}${on}" data-act="stat-filter" data-filter="${filter}">
         <span class="k">${k}</span>
         <span class="v"><span class="cur">¥</span>${DB.fmtMoney(v)}</span>
-        ${sub}
+        ${sub}${cons}
         <span class="meta" aria-hidden="true">›</span>
       </div>`;
     };
     const totalCard = `<div class="stat-card total c2" data-act="stat-filter" data-filter="all">
         <span class="k">总花费</span>
         <span class="v"><span class="cur">¥</span>${DB.fmtMoney(st.total)}</span>
-        <span class="sub consumed">实耗：¥${DB.fmtMoney(st.consumed)}</span>
+        <span class="sub consumed">¥${DB.fmtMoney(st.consumed)}</span>
         <span class="meta" aria-hidden="true">›</span>
       </div>`;
     const techCardK = `<div class="stat-card tech c2" data-act="edit-tech">
@@ -152,9 +153,9 @@
       ${totalCard}
       ${techCardK}
       ${tCard('总时长', DB.fmtHours(st.totalH))}
-      ${amt('教练费', st.coach, 'coach', 'accent')}
+      ${amt('教练费', st.coach, 'coach', 'accent', { consumed: st.coachConsumed })}
       ${amt('装备费', st.equip, 'equipment')}
-      ${amt('场地费', st.venueFee, 'venue', '', { sub: venueSub })}
+      ${amt('场地费', st.venueFee, 'venue', '', { sub: venueSub, consumed: st.venueConsumed })}
       ${amt('耗材费', st.consum, 'consumable')}
       ${amt('陪练费', st.partnerFee, 'partner')}
       ${tCard('上课时长', DB.fmtHours(st.classH))}
@@ -262,9 +263,9 @@
         else if (e.category === 'venue') chips += `<span class="chip sm">场地包</span>`;
       } else if (e.category === 'equipment') {
         const n = (e.subs || []).length;
-        const kind = DB.EQUIP_KINDS[e.equipKind];
+        const kindLabel = DB.equipKindLabel(e.equipKind);
         amtSub = `总价 · ${n} 次采购`;
-        if (kind && kind.label !== e.name) chips += `<span class="chip blue sm">${esc(kind.label)}</span>`;
+        if (kindLabel && kindLabel !== e.name) chips += `<span class="chip blue sm">${esc(kindLabel)}</span>`;
       } else if (e.category === 'consumable') {
         const q = DB.consumableQty(e);
         const n = (e.subs || []).length;
@@ -465,41 +466,34 @@
       const nameLabel = root.querySelector('#fNameLabel');
       const val = id => { const el = root.querySelector('#' + id); return el ? el.value : ''; };
 
-      /* 装备：按类型渲染「首次采购」的明细字段 */
-      function renderKindFields() {
-        const wrap = root.querySelector('#fKindFields');
-        if (!wrap) return;
-        const spec = DB.EQUIP_KINDS[kind] || DB.EQUIP_KINDS.otherEq;
-        const first = editId && e && (e.subs || []).length ? e.subs[0] : null;
-        wrap.innerHTML = spec.fields.map(([key, label]) => {
-          const isNum = key === 'price';
-          const v = first && first[key] != null ? first[key] : '';
-          return `<div class="field"><label>${label}</label>
-            <input ${isNum ? 'type="number" inputmode="decimal"' : ''} class="input" id="kf_${key}" placeholder="${isNum ? '0' : ''}" value="${esc(v)}"></div>`;
-        }).join('');
-      }
-
       function renderExtra() {
         /* 耗材会隐藏顶部「名称」，切换分类时先复位 */
         const nameField = root.querySelector('#fName');
         if (nameField) nameField.closest('.field').style.display = '';
         if (cat === 'equipment') {
           nameLabel.textContent = '名称（装备总称，如网球鞋）';
+          const kinds = DB.allEquipKinds();
           extra.innerHTML = `
             <div class="field"><label>装备类型</label>
-              <div class="segmented" id="fKind">
-                ${DB.EQUIP_KIND_KEYS.map(k => `<button type="button" data-k="${k}" class="${k === kind ? 'on' : ''}">${DB.EQUIP_KINDS[k].label}</button>`).join('')}
+              <div class="segmented wrap" id="fKind">
+                ${kinds.map(kk => `<button type="button" data-k="${kk.key}" class="${kk.key === kind ? 'on' : ''}">${esc(kk.label)}</button>`).join('')}
+                <button type="button" class="add-kind" data-act="add-equip-kind">＋ 添加类型</button>
               </div></div>
-            <div id="fKindFields"></div>
-            <div class="hint" style="margin-bottom:12px">这里填的是<b>首次采购</b>的明细；以后又买了就在卡片上点「＋ 追加」，上方总价自动累加</div>`;
-          root.querySelectorAll('#fKind button').forEach(b => {
+            <div class="hint" style="margin-bottom:12px">先选大类，品牌 / 型号 / 价格留到卡片上的「＋ 追加」里填；总价会自动累加</div>`;
+          root.querySelectorAll('#fKind button[data-k]').forEach(b => {
             b.addEventListener('click', () => {
               kind = b.dataset.k;
-              root.querySelectorAll('#fKind button').forEach(x => x.classList.toggle('on', x === b));
-              renderKindFields();
+              root.querySelectorAll('#fKind button[data-k]').forEach(x => x.classList.toggle('on', x === b));
             });
           });
-          renderKindFields();
+          const addBtn = root.querySelector('[data-act="add-equip-kind"]');
+          if (addBtn) addBtn.addEventListener('click', () => {
+            const label = prompt('新装备类型名称（如：护腕、运动眼镜）');
+            if (!label) return;
+            const key = DB.addCustomEquipKind(label);
+            kind = key;
+            renderExtra();
+          });
 
         } else if (cat === 'package') {
           nameLabel.textContent = '名称（课包）';
@@ -674,25 +668,11 @@
         const payload = { category: cat, name, note, dateMonth };
 
         if (cat === 'equipment') {
-          const spec = DB.EQUIP_KINDS[kind] || DB.EQUIP_KINDS.otherEq;
-          const sub = { id: DB.uid('s'), date: dateMonth + '-01', note: '' };
-          let price = 0;
-          spec.fields.forEach(([k]) => {
-            const v = val('kf_' + k);
-            if (k === 'price') { price = parseFloat(v) || 0; sub.price = price; }
-            else sub[k] = (v || '').trim();
-          });
-          if (price <= 0) { toast('请填写价格'); return; }
+          /* 主表单只定大类；型号 / 价格等明细走「＋ 追加」 */
           payload.equipKind = kind;
           payload.brand = '';
-          const old = (e && e.subs) || [];
-          if (editId) {
-            sub.id = old[0] ? old[0].id : sub.id;
-            payload.subs = [sub].concat(old.slice(1));
-          } else {
-            payload.subs = [sub];
-          }
-          payload.amount = payload.subs.reduce((a, s2) => a + (Number(s2.price) || 0), 0);
+          payload.subs = (editId && e && e.subs) ? e.subs.slice() : [];
+          payload.amount = editId ? DB.expenseTotal(e) : 0;
 
         } else if (cat === 'package') {
           const tp = parseFloat(val('pTotal')) || 0;
@@ -964,6 +944,7 @@
       return `<div class="card item lesson">
         <div class="l-head">
           <span class="l-date">${esc(l.date || '')}</span>
+          ${l.time ? `<span class="l-time">${esc(DB.fmtTimeRange(l.time, l.hours))}</span>` : ''}
           ${typeChip(l.type)}
           <span class="l-hours">${DB.fmtHours(l.hours)}</span>
         </div>
@@ -1001,7 +982,7 @@
   }
 
   let tipsExpanded = false;
-  let pendingReminderRid = null;
+  let pendingReminderInfo = null;
   function renderTechStat() {
     const s = state();
     const all = [];
@@ -1054,15 +1035,16 @@
         person: r.note || '', keyName: r.note || '', note: r.note || '', type: 'class'
       }));
 
-    /* 课包耗课 → 自动派生（date ≥ 今天） */
+    /* 课包耗课 → 自动派生（date ≥ 今天，done 的不再显示） */
     s.expenses.filter(e => e.isPackage && e.category === 'package').forEach(e => {
       (e.subs || []).forEach(sb => {
+        if (sb.done) return;
         if (sb.date < today || sb.date > max) return;
         const venueId = clubToVenue[e.club] || '';
         const keyName = e.name || '';
         if (lessonMatch(sb.date, 'class', venueId, e.coach || '', keyName)) return;
         items.push({
-          manual: false, src: 'pack', eid: e.id, sid: sb.id, date: sb.date, time: '',
+          manual: false, src: 'pack', eid: e.id, sid: sb.id, date: sb.date, time: sb.time || '',
           venueId, person: e.coach || '', keyName, note: e.name || '课包', type: 'class'
         });
       });
@@ -1071,12 +1053,13 @@
     /* 散买课流水 → 自动派生 */
     s.expenses.filter(e => e.category === 'alacarte').forEach(e => {
       (e.subs || []).forEach(sb => {
+        if (sb.done) return;
         if (sb.date < today || sb.date > max) return;
         const venueId = clubToVenue[e.club] || '';
         const keyName = e.name || '';
         if (lessonMatch(sb.date, 'class', venueId, e.coach || '', keyName)) return;
         items.push({
-          manual: false, src: 'alacarte', eid: e.id, sid: sb.id, date: sb.date, time: '',
+          manual: false, src: 'alacarte', eid: e.id, sid: sb.id, date: sb.date, time: sb.time || '',
           venueId, person: e.coach || '', keyName, note: e.name || '散买课', type: 'class'
         });
       });
@@ -1085,18 +1068,23 @@
     /* 场地 / 发球机包消耗 → 自动派生 */
     s.expenses.filter(e => e.isPackage && e.category === 'venue').forEach(e => {
       (e.subs || []).forEach(sb => {
+        if (sb.done) return;
         if (sb.date < today || sb.date > max) return;
         const venueId = e.venueId || '';
         const keyName = e.name || '';
         if (lessonMatch(sb.date, 'class', venueId, '', keyName)) return;
         items.push({
-          manual: false, src: 'venuePack', eid: e.id, sid: sb.id, date: sb.date, time: '',
+          manual: false, src: 'venuePack', eid: e.id, sid: sb.id, date: sb.date, time: sb.time || '',
           venueId, person: '', keyName, note: e.name || (e.venueKind === 'machine' ? '发球机包' : '场地包'), type: 'class'
         });
       });
     });
 
-    items.sort((a, b) => (a.date || '') < (b.date || '') ? -1 : 1);
+    /* 排序：日期 → 时间 */
+    items.sort((a, b) => {
+      if ((a.date || '') !== (b.date || '')) return (a.date || '') < (b.date || '') ? -1 : 1;
+      return (a.time || '') < (b.time || '') ? -1 : ((a.time || '') > (b.time || '') ? 1 : 0);
+    });
 
     if (!items.length) {
       box.innerHTML = '<div class="empty" style="padding:10px">未来 7 天暂无约好的课，点「＋ 添加」记一笔</div>';
@@ -1104,18 +1092,28 @@
     }
 
     const prefillOf = it => encodeURIComponent(JSON.stringify({
-      rid: it.id, date: it.date, time: it.time, venueId: it.venueId, type: it.type, person: it.person, note: it.note
+      rid: it.manual ? it.id : '',
+      eid: it.manual ? '' : it.eid,
+      sid: it.manual ? '' : it.sid,
+      manual: it.manual, date: it.date, time: it.time, venueId: it.venueId, type: it.type, person: it.person, note: it.note
     }));
 
     box.innerHTML = items.map(it => `
-      <div class="remind-item ${it.manual ? '' : 'derived'}">
-        <div class="ri-main">
+      <div class="remind-item ${it.manual ? '' : 'derived'}" data-id="${it.manual ? it.id : ''}" data-eid="${it.manual ? '' : it.eid}" data-sid="${it.manual ? '' : it.sid}">
+        <div class="ri-main" data-act="reminder-toggle">
           <div class="ri-date">${esc(it.date)}<b>${it.time ? ' ' + esc(it.time) : ''}</b>${it.manual ? '' : '<span class="ri-tag">自动</span>'}</div>
           <div class="ri-meta">${it.venueId ? '📍 ' + esc(vmap[it.venueId] || '') : ''}${it.note ? (it.venueId ? ' · ' : '') + esc(it.note) : ''}</div>
         </div>
         <div class="ri-actions">
           <button class="ri-done" data-act="reminder-to-lesson" data-prefill="${prefillOf(it)}">✓ 记上课</button>
           ${it.manual ? `<button class="ri-del" data-act="del-reminder" data-id="${it.id}">✕</button>` : ''}
+        </div>
+        <div class="ri-edit">
+          <div class="field-row">
+            <div class="field"><label>日期</label><input type="date" class="input" value="${esc(it.date)}" ${it.manual ? '' : 'disabled'}></div>
+            <div class="field"><label>时间</label><input type="time" class="input" value="${esc(it.time)}"></div>
+          </div>
+          <button class="btn-ghost sm" data-act="reminder-save-edit">保存时间</button>
         </div>
       </div>`).join('');
   }
@@ -1235,7 +1233,7 @@
         date: prefill.date || DB.todayStr(), type: prefill.type || 'class',
         venueId: prefill.venueId || '', person: prefill.person || '',
         hours: 1, techPoints: [], tips: [], gains: '', cost: 0,
-        note: prefill.note || '', attachments: []
+        note: prefill.note || '', time: prefill.time || '', attachments: []
       };
     }
     const s = state();
@@ -1255,6 +1253,8 @@
       <div class="field-row">
         <div class="field"><label>日期</label>
           <input type="date" class="input" id="lDate" value="${l ? l.date : DB.todayStr()}"></div>
+        <div class="field"><label>开始时间</label>
+          <input type="time" class="input" id="lTime" value="${l ? (l.time || '') : ''}"></div>
         <div class="field"><label>时长（小时）</label>
           <input type="number" inputmode="decimal" step="0.5" class="input" id="lHours" value="${l ? l.hours : 1}"></div>
       </div>
@@ -1498,6 +1498,7 @@
       root.querySelector('#lSave').addEventListener('click', async () => {
         const date = root.querySelector('#lDate').value || DB.todayStr();
         const hours = parseFloat(root.querySelector('#lHours').value) || 0;
+        const time = root.querySelector('#lTime').value || '';
         const person = personInput.disabled ? '' : personInput.value.trim();
         const venueId = root.querySelector('#lVenue').value;
         const gains = root.querySelector('#lGains').value.trim();
@@ -1531,7 +1532,7 @@
         }
         pendingFiles = [];
 
-        const payload = { date, hours, type, person, venueId, techPoints: techSel, gains, tips, cost, courseId, attachments: atts };
+        const payload = { date, time, hours, type, person, venueId, techPoints: techSel, gains, tips, cost, courseId, attachments: atts };
         if (editId) DB.updateLesson(editId, payload);
         else DB.addLesson(payload);
 
@@ -1557,8 +1558,12 @@
             DB.addSub(pk.id, { date, units, lessons, note: '训练记录同步扣' });
           }
         }
-        /* Z：从提醒「记上课」进来时，保存后删掉那条手动提醒 */
-        if (pendingReminderRid) { DB.removeReminder(pendingReminderRid); pendingReminderRid = null; }
+        /* Z：从提醒「记上课」进来时，保存后删掉该条提醒（手动=删除；派生=标 done 让提醒立即消失） */
+        if (pendingReminderInfo) {
+          if (pendingReminderInfo.manual && pendingReminderInfo.rid) DB.removeReminder(pendingReminderInfo.rid);
+          else if (pendingReminderInfo.eid && pendingReminderInfo.sid) DB.updateSub(pendingReminderInfo.eid, pendingReminderInfo.sid, { done: true });
+          pendingReminderInfo = null;
+        }
 
         closeSheet();
         refresh();
@@ -1630,7 +1635,7 @@
     openSheet(`${ds} · ${DB.fmtHours(total)}`, list.length ? `
       <div class="list" style="padding:0">
         ${list.map(l => `<div class="card item lesson">
-          <div class="l-head"><span class="l-date">${esc(l.date)}</span>${typeChip(l.type)}<span class="l-hours">${DB.fmtHours(l.hours)}</span></div>
+          <div class="l-head"><span class="l-date">${esc(l.date)}</span>${l.time ? `<span class="l-time">${esc(DB.fmtTimeRange(l.time, l.hours))}</span>` : ''}${typeChip(l.type)}<span class="l-hours">${DB.fmtHours(l.hours)}</span></div>
           <div class="l-meta">${l.person ? esc(l.person) : ''}${l.venueId ? ' · ' + esc(venueMap[l.venueId] || '') : ''}</div>
           ${(l.techPoints || []).length ? `<div class="tech-row">${l.techPoints.map(t => `<span class="chip green sm">${esc(t)}</span>`).join('')}</div>` : ''}
           ${l.gains ? `<div class="gain"><span class="ico">✅</span><span>${esc(l.gains)}</span></div>` : ''}
@@ -2358,10 +2363,31 @@
           if (trow) trow.classList.toggle('expanded');
           return;
         }
+        case 'reminder-toggle': {
+          const item = el.closest('.remind-item');
+          if (item) item.classList.toggle('expanded');
+          return;
+        }
+        case 'reminder-save-edit': {
+          const item = el.closest('.remind-item');
+          if (!item) return;
+          const dateInput = item.querySelector('.ri-edit input[type="date"]');
+          const timeInput = item.querySelector('.ri-edit input[type="time"]');
+          const time = timeInput ? timeInput.value || '' : '';
+          const id = item.dataset.id, eid = item.dataset.eid, sid = item.dataset.sid;
+          if (id) {
+            const date = dateInput ? dateInput.value || '' : '';
+            DB.updateReminder(id, { date, time });
+          } else if (eid && sid) {
+            DB.updateSub(eid, sid, { time });
+          }
+          refresh(); toast('已更新上课时间');
+          return;
+        }
         case 'reminder-to-lesson': {
           let pf = {};
           try { pf = JSON.parse(decodeURIComponent(el.dataset.prefill || '{}')); } catch (e) { pf = {}; }
-          if (pf.rid) pendingReminderRid = pf.rid;
+          pendingReminderInfo = { manual: !!pf.manual, rid: pf.rid || '', eid: pf.eid || '', sid: pf.sid || '' };
           openLessonForm(null, pf);
           return;
         }
@@ -2387,6 +2413,12 @@
 
   /* ---------------- 启动 ---------------- */
   DB.load();
+  DB.pruneExpiredReminders();
+  (function scheduleMidnightPrune() {
+    const now = new Date();
+    const next = new Date(now); next.setHours(24, 0, 0, 0);
+    setTimeout(() => { DB.pruneExpiredReminders(); scheduleMidnightPrune(); }, next - now);
+  })();
   refresh();
 
   if ('serviceWorker' in navigator) {
