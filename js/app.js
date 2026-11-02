@@ -1736,7 +1736,8 @@
   }
 
   function openVenueForm(editId) {
-    const v = editId ? state().venues.find(x => x.id === editId) : null;
+    const s = state();
+    const v = editId ? s.venues.find(x => x.id === editId) : null;
     let rating = v ? (v.rating || 0) : 0;
     let types = v ? [...(v.types || [])] : [];
 
