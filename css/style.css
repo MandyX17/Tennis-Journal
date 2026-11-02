@@ -73,6 +73,9 @@ ul{margin:0;padding:0;list-style:none;}
   transition:.18s;
 }
 .icon-btn:active{transform:scale(.94);background:rgba(242,237,225,.12);}
+/* 关闭钮：去掉圆形透明底圈，仅保留可点击热区（:active 给轻反馈） */
+#sheetClose{background:transparent;border-color:transparent;}
+#sheetClose:active{background:rgba(242,237,225,.12);}
 
 /* ===== 顶部统计网格 ===== */
 .stat-grid{
@@ -323,6 +326,11 @@ ul{margin:0;padding:0;list-style:none;}
   font-size:12.5px;font-weight:700;letter-spacing:.2px;
   font-variant-numeric:tabular-nums;color:var(--text);
 }
+.lesson .l-time{
+  font-size:11.5px;font-weight:700;font-variant-numeric:tabular-nums;
+  color:#A9C77E;background:rgba(127,160,94,.16);
+  border:1px solid rgba(127,160,94,.3);border-radius:7px;padding:1px 7px;
+}
 .lesson .l-hours{
   margin-left:auto;font-size:13px;font-weight:700;color:var(--green-bright);
   font-variant-numeric:tabular-nums;
@@ -569,6 +577,10 @@ textarea.input{min-height:74px;resize:vertical;line-height:1.55;}
   background:rgba(127,160,94,.2);color:#D6E8BE;
   border-color:rgba(127,160,94,.45);
 }
+.segmented button.add-kind{
+  background:transparent;color:#A9C77E;border-style:dashed;border-color:rgba(127,160,94,.5);
+}
+.segmented button.add-kind:active{background:rgba(127,160,94,.15);}
 
 .switch-row{
   display:flex;align-items:center;justify-content:space-between;
@@ -809,8 +821,8 @@ textarea.input{min-height:74px;resize:vertical;line-height:1.55;}
   margin-top:3px;font-variant-numeric:tabular-nums;line-height:1.4;
   white-space:normal;word-break:break-word;
 }
-.stat-card.total .sub.consumed{color:#CDE0B6;font-weight:600;}
-.stat-card.total .sub.consumed::before{content:"实耗 ";font-weight:500;color:var(--muted);}
+.stat-card .sub.consumed{color:#CDE0B6;font-weight:600;}
+.stat-card .sub.consumed::before{content:"实耗 ";font-weight:500;color:var(--muted);}
 
 /* ===== P：统计卡低调箭头（点击筛选保留） ===== */
 .stat-card .meta{
@@ -821,13 +833,17 @@ textarea.input{min-height:74px;resize:vertical;line-height:1.55;}
 
 /* ===== J：上课提醒卡更醒目（主色描边 + 左侧色条） ===== */
 .remind-item{
-  display:flex;align-items:center;gap:10px;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
   padding:10px 12px;border-radius:11px;
   background:linear-gradient(160deg,rgba(127,160,94,.12),rgba(242,237,225,.04));
   border:1px solid rgba(127,160,94,.36);
   border-left:3px solid var(--green-bright);
   position:relative;
 }
+.ri-main{flex:1;min-width:0;cursor:pointer;}
+.ri-edit{display:none;width:100%;margin-top:8px;padding-top:8px;border-top:1px solid var(--line);}
+.remind-item.expanded .ri-edit{display:block;}
+.ri-edit .btn-ghost{margin-top:6px;}
 .remind-item.derived{
   background:rgba(242,237,225,.045);
   border:1px solid var(--line-strong);
