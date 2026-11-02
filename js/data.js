@@ -38,6 +38,19 @@
     const p = s.split('-');
     return Number(p[1]) + '.' + Number(p[2]);
   }
+  /* 上课时间区间：19:00 + 1h → "19:00-20:00"；23:00 + 2h → "23:00-次日01:00" */
+  function fmtTimeRange(time, hours) {
+    if (!time) return '';
+    const parts = ('' + time).split(':');
+    const sh = parseInt(parts[0], 10);
+    if (isNaN(sh)) return '';
+    const sm = parseInt(parts[1] || '0', 10) || 0;
+    const startMin = sh * 60 + sm;
+    const endMin = startMin + Math.round((Number(hours) || 0) * 60);
+    const fmt = min => { const hh = Math.floor(min / 60) % 24; const mm = ((min % 60) + 60) % 60; return pad2(hh) + ':' + pad2(mm); };
+    const nextDay = endMin >= 24 * 60;
+    return fmt(startMin) + '-' + (nextDay ? '次日' : '') + fmt(endMin);
+  }
   function esc(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -79,6 +92,25 @@
     otherEq: { label: '其他装备', fields: [['brand', '品牌'], ['detail', '明细'], ['price', '价格 ¥']] }
   };
   const EQUIP_KIND_KEYS = Object.keys(EQUIP_KINDS);
+
+  /* 自定义装备类型（用户通过「＋添加类型」新增，存 state.customEquipKinds） */
+  function allEquipKinds() {
+    const custom = (state.customEquipKinds || []);
+    return EQUIP_KIND_KEYS.map(k => ({ key: k, label: EQUIP_KINDS[k].label, custom: false }))
+      .concat(custom.map(c => ({ key: c.key, label: c.label, custom: true })));
+  }
+  function equipKindLabel(key) {
+    if (EQUIP_KINDS[key]) return EQUIP_KINDS[key].label;
+    const c = (state.customEquipKinds || []).find(x => x.key === key);
+    return c ? c.label : (key || '装备');
+  }
+  function addCustomEquipKind(label) {
+    const list = state.customEquipKinds || (state.customEquipKinds = []);
+    const key = 'eq_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    list.push({ key, label: (label || '自定义装备').trim() || '自定义装备' });
+    save();
+    return key;
+  }
 
   /* ---------- 预置数据（按用户手工账本，2026-10） ---------- */
   function seed() {
@@ -249,6 +281,7 @@
     s.reminders = Array.isArray(s.reminders) ? s.reminders : [];
     if (typeof s.learnNote !== 'string') s.learnNote = '';
     if (!Array.isArray(s.starredTech)) s.starredTech = [];
+    if (!Array.isArray(s.customEquipKinds)) s.customEquipKinds = [];
     s.venues.forEach(v => {
       if (!Array.isArray(v.photos)) v.photos = [];
       if (!Array.isArray(v.types)) v.types = [];
@@ -462,12 +495,15 @@
     const st = {
       total: 0, coach: 0, equip: 0, consum: 0, partnerFee: 0, venueFee: 0, venueFeeCourt: 0, venueFeeMachine: 0,
       other: 0, classH: 0, partnerH: 0, machineH: 0, sparringH: 0, totalH: 0, remaining: 0,
-      equipCount: 0, packageCount: 0, consumed: 0
+      equipCount: 0, packageCount: 0, consumed: 0, coachConsumed: 0, venueConsumed: 0
     };
     (state.expenses || []).forEach(e => {
       const t = expenseTotal(e);
       st.total += t;
-      st.consumed += expenseConsumedValue(e, today);
+      const cv = expenseConsumedValue(e, today);
+      st.consumed += cv;
+      if (e.category === 'package' || e.category === 'alacarte') st.coachConsumed += cv;
+      else if (e.category === 'venue') st.venueConsumed += cv;
       if (e.category === 'equipment') { st.equip += t; st.equipCount++; }
       else if (e.category === 'package') { st.coach += t; st.packageCount++; }
       else if (e.category === 'alacarte') { st.coach += t; }
@@ -578,6 +614,12 @@
   }
   function removeReminder(id) {
     state.reminders = (state.reminders || []).filter(r => r.id !== id);
+    save();
+  }
+  function updateReminder(id, patch) {
+    const r = (state.reminders || []).find(x => x.id === id);
+    if (!r) return;
+    Object.assign(r, patch);
     save();
   }
   /* X：过期手动提醒自动删除（date < 今天），不动训练/记账等其他记录 */
@@ -790,10 +832,12 @@
     consumableQty, equipSum, subSummary, expenseTotal, expenseConsumedValue,
     computeStats, venueStats, lessonHoursByDay, lessonTypeHoursByDay,
     typeDistribution, monthlyLessonStats, techPointStats, flatTips,
+    fmtTimeRange,
     addExpense, updateExpense, removeExpense, addSub, removeSub, updateSub,
     addLesson, updateLesson, removeLesson,
     addVenue, updateVenue, removeVenue,
-    addReminder, removeReminder, pruneExpiredReminders, exportState, importState,
+    allEquipKinds, equipKindLabel, addCustomEquipKind,
+    addReminder, removeReminder, updateReminder, pruneExpiredReminders, exportState, importState,
     media, mediaURL, revokeAllURLs
   };
 })(window);
