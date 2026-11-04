@@ -677,7 +677,7 @@
     if (!e) return;
     e.subs = e.subs || [];
     const date = sub.date || todayStr();
-    const done = date <= todayStr();
+    const done = date < todayStr();
     e.subs.push(Object.assign({ id: uid('s'), date, done }, sub));
     save();
   }
