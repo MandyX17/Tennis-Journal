@@ -313,6 +313,11 @@
       } else {
         (e.subs || []).forEach(s => { if (!s.date) s.date = e.date; });
       }
+      /* v15：实耗改为按 done 管控——旧 sub / 单笔场地 / 陪练补 done（历史日期 ≤ 今天 = 已确认，历史实耗不变） */
+      (e.subs || []).forEach(sb => { if (sb.done == null) sb.done = !!(sb.date && sb.date <= todayStr()); });
+      if ((e.category === 'venue' && !e.isPackage) || e.category === 'partner') {
+        if (e.done == null) e.done = !!(e.date && e.date <= todayStr());
+      }
     });
     s.lessons.forEach(l => {
       if (!Array.isArray(l.attachments)) l.attachments = [];
@@ -467,24 +472,32 @@
     }
   }
 
-  /* 实耗（已实际发生的花费）：仅统计 date ≤ 今天的消耗 / 支出
-     - 预付包（课包/场地包/机包）：已消耗单位 × 单价
-     - 散课：已上且 date≤今天 的每次价格
-     - 单次场地费/装备/耗材/陪练/其他：购买日期 ≤ 今天 即全额计入 */
+  /* 实耗（已实际发生的花费）：仅统计「已确认（done=true）」的部分
+     课包/散买/场地包/发球机包按 done 的 sub 计入；单笔场地/陪练按 e.done 计入；
+     装备/耗材/其他与训练无关，仍按 date ≤ 今天 计入（不受 Finish 管控）。
+     done 在 addSub / 归一化 / Finish 时设置。 */
   function expenseConsumedValue(e, today) {
     today = today || todayStr();
     if (e.category === 'package') {
-      return consumedUnits(e) * packageUnitPrice(e);
+      const u = (e.subs || []).filter(s => s.done).reduce((a, s) => a + subUnits(s), 0);
+      return u * packageUnitPrice(e);
     }
     if (e.category === 'alacarte') {
-      return (e.subs || []).reduce((a, s) => a + (s.date && s.date <= today ? (Number(s.price) || Number(s.amount) || 0) : 0), 0);
+      return (e.subs || []).reduce((a, s) =>
+        a + ((s.done && s.date && s.date <= today) ? (Number(s.price) || Number(s.amount) || 0) : 0), 0);
     }
     if (e.category === 'venue') {
-      if (e.isPackage) return consumedUnits(e) * packageUnitPrice(e);
-      return (e.date && e.date <= today) ? (Number(e.amount) || 0) : 0;
+      if (e.isPackage) {
+        const u = (e.subs || []).filter(s => s.done).reduce((a, s) => a + subUnits(s), 0);
+        return u * packageUnitPrice(e);
+      }
+      return e.done ? (Number(e.amount) || 0) : 0;
+    }
+    if (e.category === 'partner') {
+      return e.done ? (Number(e.amount) || 0) : 0;
     }
     if (e.category === 'consumable') {
-      /* 实耗按每条明细日期：仅 date ≤ 今天的 数量×单价 计入 */
+      /* 耗材：与训练无关，按每条明细日期（date ≤ 今天）计入 */
       return (e.subs || []).reduce((a, s) =>
         a + ((s.date && s.date <= today) ? (Number(s.qty) || 0) * (Number(s.price) || 0) : 0), 0);
     }
@@ -496,7 +509,7 @@
     const st = {
       total: 0, coach: 0, equip: 0, consum: 0, partnerFee: 0, venueFee: 0, venueFeeCourt: 0, venueFeeMachine: 0,
       other: 0, classH: 0, partnerH: 0, machineH: 0, sparringH: 0, totalH: 0, remaining: 0,
-      equipCount: 0, packageCount: 0, consumed: 0, coachConsumed: 0, venueConsumed: 0
+      equipCount: 0, packageCount: 0, consumed: 0, coachConsumed: 0, venueConsumed: 0, partnerConsumed: 0
     };
     (state.expenses || []).forEach(e => {
       const t = expenseTotal(e);
@@ -509,7 +522,7 @@
       else if (e.category === 'package') { st.coach += t; st.packageCount++; }
       else if (e.category === 'alacarte') { st.coach += t; }
       else if (e.category === 'consumable') { st.consum += t; }
-      else if (e.category === 'partner') { st.partnerFee += t; }
+      else if (e.category === 'partner') { st.partnerFee += t; st.partnerConsumed += cv; }
       else if (e.category === 'venue') {
         st.venueFee += t;
         if (e.venueKind === 'machine') st.venueFeeMachine += t; else st.venueFeeCourt += t;
@@ -663,7 +676,9 @@
     const e = state.expenses.find(x => x.id === expenseId);
     if (!e) return;
     e.subs = e.subs || [];
-    e.subs.push(Object.assign({ id: uid('s'), date: todayStr() }, sub));
+    const date = sub.date || todayStr();
+    const done = date <= todayStr();
+    e.subs.push(Object.assign({ id: uid('s'), date, done }, sub));
     save();
   }
   function removeSub(expenseId, subId) {
