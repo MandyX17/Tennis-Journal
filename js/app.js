@@ -822,11 +822,15 @@
           <input type="number" inputmode="decimal" step="0.5" class="input" id="aUnits" value="${cur ? (cur.units != null ? cur.units : (cur.lessons || 1)) : 1}"></div>
         <div class="field"><label>备注</label>
           <input class="input" id="aNote" placeholder="可选" value="${cur ? esc(cur.note || '') : ''}"></div>
+        <div class="switch-row"><div><div class="t">关联提醒</div><div class="d">在「提醒」页生成一条未来 7 天内的提醒；关掉则不提醒</div></div>
+          <div class="switch ${cur && cur.remind === false ? '' : 'on'}" id="aRemind"></div></div>
         <div class="hint" style="margin-bottom:14px">当前剩余 <b style="color:#A9C77E">${rem} ${pu}</b>，保存后自动扣减（包已按总价计入总花费${isVenue ? '' : '，耗课无需再填价格'}）</div>
         <div class="form-actions">
           <button class="btn-lg ghost" data-close>取消</button>
           <button class="btn-lg primary" id="aSave">${isEdit ? '保存修改' : (isVenue ? '确认扣包' : '确认耗课')}</button>
         </div>`, (root) => {
+        const remSw = root.querySelector('#aRemind');
+        if (remSw) remSw.addEventListener('click', () => remSw.classList.toggle('on'));
         root.querySelector('#aSave').addEventListener('click', () => {
           const amount = parseFloat(root.querySelector('#aUnits').value) || 0;
           if (!isEdit && amount > DB.remainingUnits(e)) { toast(`超出剩余 ${pu}数`); return; }
@@ -836,6 +840,7 @@
             timeEnd: root.querySelector('#aTimeEnd').value || '',
             units: amount,
             lessons: isVenue ? 0 : amount,
+            remind: remSw ? remSw.classList.contains('on') : true,
             note: root.querySelector('#aNote').value.trim()
           };
           if (isEdit) DB.updateSub(e.id, cur.id, patch); else DB.addSub(e.id, patch);
@@ -860,11 +865,15 @@
           <input type="number" inputmode="decimal" class="input" id="aPrice" placeholder="0" value="${cur && cur.price != null ? cur.price : ''}"></div>
         <div class="field"><label>备注</label>
           <input class="input" id="aNote" placeholder="可选，如：体验课 / 换了教练" value="${cur ? esc(cur.note || '') : ''}"></div>
+        <div class="switch-row"><div><div class="t">关联提醒</div><div class="d">在「提醒」页生成一条未来 7 天内的提醒；关掉则不提醒</div></div>
+          <div class="switch ${cur && cur.remind === false ? '' : 'on'}" id="aRemind"></div></div>
         <div class="hint" style="margin-bottom:14px">已上 <b style="color:#E8C56A">${cnt}</b> 节，累计 <b style="color:#A9C77E">¥${DB.fmtMoney(DB.alacarteTotal(e))}</b>；每次价格可不同，自动累加</div>
         <div class="form-actions">
           <button class="btn-lg ghost" data-close>取消</button>
           <button class="btn-lg primary" id="aSave">${isEdit ? '保存修改' : '确认'}</button>
         </div>`, (root) => {
+        const remSw = root.querySelector('#aRemind');
+        if (remSw) remSw.addEventListener('click', () => remSw.classList.toggle('on'));
         root.querySelector('#aSave').addEventListener('click', () => {
           const price = parseFloat(root.querySelector('#aPrice').value) || 0;
           if (price <= 0) { toast('请填写本次价格'); return; }
@@ -873,6 +882,7 @@
             time: root.querySelector('#aTime').value || '',
             timeEnd: root.querySelector('#aTimeEnd').value || '',
             lessons: 1, price,
+            remind: remSw ? remSw.classList.contains('on') : true,
             note: root.querySelector('#aNote').value.trim()
           };
           if (isEdit) DB.updateSub(e.id, cur.id, patch); else DB.addSub(e.id, patch);
@@ -1068,6 +1078,7 @@
     s.expenses.filter(e => e.isPackage && e.category === 'package').forEach(e => {
       (e.subs || []).forEach(sb => {
         if (sb.done) return;
+        if (sb.remind === false) return;
         if (sb.date < today || sb.date > max) return;
         const venueId = clubToVenue[e.club] || '';
         const keyName = e.name || '';
@@ -1083,6 +1094,7 @@
     s.expenses.filter(e => e.category === 'alacarte').forEach(e => {
       (e.subs || []).forEach(sb => {
         if (sb.done) return;
+        if (sb.remind === false) return;
         if (sb.date < today || sb.date > max) return;
         const venueId = clubToVenue[e.club] || '';
         const keyName = e.name || '';
@@ -1098,6 +1110,7 @@
     s.expenses.filter(e => e.isPackage && e.category === 'venue').forEach(e => {
       (e.subs || []).forEach(sb => {
         if (sb.done) return;
+        if (sb.remind === false) return;
         if (sb.date < today || sb.date > max) return;
         const venueId = e.venueId || '';
         const keyName = e.name || '';
@@ -1577,11 +1590,11 @@
         if (courseId && deduct) {
           const e = state().expenses.find(x => x.id === courseId);
           if (e && e.category === 'package' && DB.remainingUnits(e) >= 1) {
-            DB.addSub(e.id, { date, units: 1, lessons: 1, note: '训练记录同步扣课' });
+            DB.addSub(e.id, { date, units: 1, lessons: 1, done: true, note: '训练记录同步扣课' });
           } else if (e && e.category === 'alacarte') {
             /* 默认沿用上一次的课价，可在学费卡片里再改 */
             const last = (e.subs || []).slice(-1)[0];
-            DB.addSub(e.id, { date, lessons: 1, price: Number(last && last.price) || 0, note: '训练记录同步' });
+            DB.addSub(e.id, { date, lessons: 1, price: Number(last && last.price) || 0, done: true, note: '训练记录同步' });
           }
         }
 
@@ -1593,7 +1606,7 @@
           if (pk && DB.remainingUnits(pk) >= need) {
             const units = type === 'class' ? 1 : (Number(hours) || 0);
             const lessons = type === 'class' ? 1 : 0;
-            DB.addSub(pk.id, { date, units, lessons, note: '训练记录同步扣' });
+            DB.addSub(pk.id, { date, units, lessons, done: true, note: '训练记录同步扣' });
           }
         }
         /* Z：从提醒「记上课」进来时，保存后删掉该条提醒（手动=删除；派生=标 done 让提醒立即消失） */
