@@ -456,6 +456,23 @@ ul{margin:0;padding:0;list-style:none;}
 .month-head b{font-size:13px;color:var(--text);font-weight:650;}
 .month-head .sum{margin-left:auto;font-variant-numeric:tabular-nums;}
 
+/* 训练类型分布：饼图 + 右侧时长 + 右上角日期筛选 */
+.td-filter{float:right;font-weight:400;font-size:11px;color:var(--dim);display:inline-flex;align-items:center;gap:4px;}
+.td-input{width:104px;padding:3px 5px;font-size:11px;border-radius:7px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:var(--text);}
+.pie-wrap{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:4px;}
+.pie-wrap svg{flex:0 0 auto;}
+.pie-legend{display:flex;flex-direction:column;gap:7px;min-width:140px;}
+.pl-row{display:flex;align-items:center;gap:8px;font-size:13px;}
+.pl-row .dot{width:11px;height:11px;border-radius:3px;flex:0 0 auto;}
+.pl-n{color:var(--dim);}
+.pl-v{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--text);font-weight:600;}
+
+/* 按月汇总卡 */
+.month-stats{display:flex;flex-direction:column;gap:6px;margin-top:2px;}
+.ms-row{display:flex;align-items:baseline;gap:6px;font-size:12.5px;line-height:1.5;flex-wrap:wrap;}
+.ms-k{color:var(--dim);}
+.ms-v{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums;}
+
 .filter-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
 .filter-row .chip{cursor:pointer;}
 .filter-row .chip.on{background:rgba(127,160,94,.22);color:#D3E5BB;border-color:rgba(127,160,94,.4);}
