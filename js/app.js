@@ -275,8 +275,18 @@
         chips += `<span class="chip gold sm">已上 ${c} 节</span>`;
         if (e.coach) chips += `<span class="chip sm">${esc(e.coach)}</span>`;
       } else if (e.category === 'venue') {
-        amtSub = '场地费';
-        if (e.venueKind === 'machine') chips += `<span class="chip blue sm">发球机</span>`;
+        if (e.isPackage) {
+          amtSub = '场地包';
+          if (e.venueKind === 'machine') chips += `<span class="chip blue sm">发球机包</span>`;
+        } else {
+          amtSub = e.date ? DB.fmtDateShort(e.date) + (e.time ? ' ' + esc(e.time) + (e.timeEnd ? '-' + esc(e.timeEnd) : '') : '') : '场地费';
+          if (e.venueKind === 'machine') chips += `<span class="chip blue sm">发球机</span>`;
+          if (e.done === false) chips += `<span class="chip sm" style="background:rgba(232,90,90,.18);color:#E8A0A0">待 Finish</span>`;
+        }
+      } else if (e.category === 'partner') {
+        amtSub = e.date ? DB.fmtDateShort(e.date) + (e.time ? ' ' + esc(e.time) + (e.timeEnd ? '-' + esc(e.timeEnd) : '') : '') : '陪练费';
+        chips += `<span class="chip sm">陪练费</span>`;
+        if (e.done === false) chips += `<span class="chip sm" style="background:rgba(232,90,90,.18);color:#E8A0A0">待 Finish</span>`;
       }
 
       /* 子流水：课包=耗课 / 装备=采购实例 / 散买=每次上课 */
@@ -438,7 +448,7 @@
     const venueOpts = [`<option value="">未指定</option>`]
       .concat(state().venues.map(v => `<option value="${v.id}">${esc(v.name)}</option>`)).join('');
     const remindToggle = `
-      <div class="switch-row"><div><div class="t">关联上课提醒</div><div class="d">保存后在「学习」页生成一条未来 7 天内的提醒</div></div>
+      <div class="switch-row"><div><div class="t">关联提醒</div><div class="d">保存后在「学习」页生成一条未来 7 天内的提醒</div></div>
       <div class="switch" id="fRemind"></div></div>`;
 
     const catBtns = Object.entries(DB.CATEGORIES).map(([k, v]) =>
@@ -509,13 +519,7 @@
               <input class="input" id="pCoach" value="${e ? esc(e.coach || '') : ''}"></div>
             <div class="field"><label>单节成本</label>
               <div class="hint" id="pUnit">—</div></div>
-            <div class="field-row">
-              <div class="field"><label>训练日期（关联提醒用）</label>
-                <input type="date" class="input" id="fDate" value="${e && e._date ? e._date : DB.todayStr()}"></div>
-              <div class="field"><label>场馆</label>
-                <select class="input" id="fVenue">${venueOpts}</select></div>
-            </div>
-            ${remindToggle}`;
+            <div class="hint" style="margin-bottom:12px">耗课的<b>日期 / 时间</b>请在卡片上的「＋ 追加耗课」里填写，会自动生成对应提醒；Finish 后才计入实耗</div>`;
           const up = () => {
             const tp = parseFloat(val('pTotal')) || 0;
             const tl = parseFloat(val('pLessons')) || 0;
@@ -532,14 +536,7 @@
               <input class="input" id="pCoach" value="${e ? esc(e.coach || '') : ''}"></div>
             <div class="field"><label>俱乐部 / 场地</label>
               <input class="input" id="pClub" value="${e ? esc(e.club || '') : ''}"></div>
-            <div class="field-row">
-              <div class="field"><label>训练日期（关联提醒用）</label>
-                <input type="date" class="input" id="fDate" value="${e && e._date ? e._date : DB.todayStr()}"></div>
-              <div class="field"><label>场馆</label>
-                <select class="input" id="fVenue">${venueOpts}</select></div>
-            </div>
-            ${remindToggle}
-            <div class="hint" style="margin-bottom:12px">每次上课请在卡片上点「＋ 追加一节课」并填入<b>本次价格</b>；总花费按各次流水自动累加，每次价格可以不一样</div>`;
+            <div class="hint" style="margin-bottom:12px">每次上课请在卡片上点「＋ 追加一节课」填写<b>日期 / 时间 / 本次价格</b>，会自动生成提醒（Finish 后计入实耗）；总花费按各次流水自动累加，每次价格可以不一样</div>`;
 
         } else if (cat === 'partner') {
           nameLabel.textContent = '名称（陪练费）';
@@ -551,12 +548,16 @@
                 <input class="input" id="xBrand" placeholder="如：小明 / 校队老王" value="${e ? esc(e.brand || '') : ''}"></div>
             </div>
             <div class="field-row">
-              <div class="field"><label>训练日期（关联提醒用）</label>
-                <input type="date" class="input" id="fDate" value="${e && e._date ? e._date : DB.todayStr()}"></div>
-              <div class="field"><label>场馆</label>
-                <select class="input" id="fVenue">${venueOpts}</select></div>
+              <div class="field"><label>训练日期</label>
+                <input type="date" class="input" id="fDate" value="${e ? (e.date || DB.todayStr()) : DB.todayStr()}"></div>
+              <div class="field"><label>开始</label>
+                <input type="time" class="input" id="fTime" value="${e ? (e.time || '') : ''}"></div>
+              <div class="field"><label>结束</label>
+                <input type="time" class="input" id="fTimeEnd" value="${e ? (e.timeEnd || '') : ''}"></div>
             </div>
-            ${remindToggle}`;
+            <div class="field"><label>场馆</label>
+              <select class="input" id="fVenue">${venueOpts}</select></div>
+            <div class="hint" style="margin-bottom:12px">填好日期 / 时间后，「提醒」页会自动出现这条陪练提醒；Finish 后才计入实耗</div>`;
 
         } else if (cat === 'consumable') {
           /* 耗材：主表单只选「大类」，明细在卡片上逐条追加 */
@@ -606,6 +607,14 @@
                 <div class="hint" id="vUnitPrice">—</div></div>
             </div>
             <div id="fVenueSingle" style="display:${isPack ? 'none' : ''}">
+              <div class="field-row">
+                <div class="field"><label>日期</label>
+                  <input type="date" class="input" id="vDate" value="${e ? (e.date || DB.todayStr()) : DB.todayStr()}"></div>
+                <div class="field"><label>开始</label>
+                  <input type="time" class="input" id="vTime" value="${e ? (e.time || '') : ''}"></div>
+                <div class="field"><label>结束</label>
+                  <input type="time" class="input" id="vTimeEnd" value="${e ? (e.timeEnd || '') : ''}"></div>
+              </div>
               <div class="field"><label>金额 ¥</label>
                 <input type="number" inputmode="decimal" class="input" id="xAmount" placeholder="0" value="${e && e.amount ? e.amount : ''}"></div>
             </div>`;
@@ -716,11 +725,20 @@
           } else {
             payload.isPackage = false;
             payload.amount = parseFloat(val('xAmount')) || 0;
+            payload.date = val('vDate') || (dateMonth + '-01');
+            payload.time = val('vTime') || '';
+            payload.timeEnd = val('vTimeEnd') || '';
+            payload.done = payload.date <= DB.todayStr();
           }
 
         } else if (cat === 'partner') {
           payload.amount = parseFloat(val('xAmount')) || 0;
           payload.brand = val('xBrand');
+          payload.date = val('fDate') || DB.todayStr();
+          payload.time = val('fTime') || '';
+          payload.timeEnd = val('fTimeEnd') || '';
+          payload.venueId = val('fVenue') || '';
+          payload.done = payload.date <= DB.todayStr();
 
         } else {
           payload.amount = parseFloat(val('xAmount')) || 0;
@@ -796,6 +814,10 @@
       openSheet(isEdit ? '编辑扣减' : (isVenue ? '追加扣包' : '追加耗课'), `
         <div class="field"><label>日期</label>
           <input type="date" class="input" id="aDate" value="${cur ? (cur.date || today) : today}"></div>
+        <div class="field-row">
+          <div class="field"><label>开始</label><input type="time" class="input" id="aTime" value="${cur ? (cur.time || '') : ''}"></div>
+          <div class="field"><label>结束</label><input type="time" class="input" id="aTimeEnd" value="${cur ? (cur.timeEnd || '') : ''}"></div>
+        </div>
         <div class="field"><label>本次消耗（${pu}）</label>
           <input type="number" inputmode="decimal" step="0.5" class="input" id="aUnits" value="${cur ? (cur.units != null ? cur.units : (cur.lessons || 1)) : 1}"></div>
         <div class="field"><label>备注</label>
@@ -810,6 +832,8 @@
           if (!isEdit && amount > DB.remainingUnits(e)) { toast(`超出剩余 ${pu}数`); return; }
           const patch = {
             date: root.querySelector('#aDate').value || today,
+            time: root.querySelector('#aTime').value || '',
+            timeEnd: root.querySelector('#aTimeEnd').value || '',
             units: amount,
             lessons: isVenue ? 0 : amount,
             note: root.querySelector('#aNote').value.trim()
@@ -828,6 +852,10 @@
       openSheet(isEdit ? '编辑这次课' : '追加一节课', `
         <div class="field"><label>上课日期</label>
           <input type="date" class="input" id="aDate" value="${cur ? (cur.date || today) : today}"></div>
+        <div class="field-row">
+          <div class="field"><label>开始</label><input type="time" class="input" id="aTime" value="${cur ? (cur.time || '') : ''}"></div>
+          <div class="field"><label>结束</label><input type="time" class="input" id="aTimeEnd" value="${cur ? (cur.timeEnd || '') : ''}"></div>
+        </div>
         <div class="field"><label>本次价格 ¥</label>
           <input type="number" inputmode="decimal" class="input" id="aPrice" placeholder="0" value="${cur && cur.price != null ? cur.price : ''}"></div>
         <div class="field"><label>备注</label>
@@ -842,6 +870,8 @@
           if (price <= 0) { toast('请填写本次价格'); return; }
           const patch = {
             date: root.querySelector('#aDate').value || today,
+            time: root.querySelector('#aTime').value || '',
+            timeEnd: root.querySelector('#aTimeEnd').value || '',
             lessons: 1, price,
             note: root.querySelector('#aNote').value.trim()
           };
@@ -1079,6 +1109,32 @@
       });
     });
 
+    /* 单笔场地费 → 自动派生（!done 且未来 7 天） */
+    s.expenses.filter(e => e.category === 'venue' && !e.isPackage).forEach(e => {
+      if (e.done) return;
+      if (!e.date || e.date < today || e.date > max) return;
+      const venueId = e.venueId || '';
+      const keyName = e.name || '';
+      if (lessonMatch(e.date, 'class', venueId, '', keyName)) return;
+      items.push({
+        manual: false, src: 'venueSingle', eid: e.id, sid: '', date: e.date, time: e.time || '', timeEnd: e.timeEnd || '',
+        venueId, person: '', keyName, note: e.name || '场地', type: 'class'
+      });
+    });
+
+    /* 陪练费 → 自动派生（单笔记录，带日期+时间） */
+    s.expenses.filter(e => e.category === 'partner').forEach(e => {
+      if (e.done) return;
+      if (!e.date || e.date < today || e.date > max) return;
+      const venueId = e.venueId || '';
+      const keyName = e.name || '';
+      if (lessonMatch(e.date, 'class', venueId, '', keyName)) return;
+      items.push({
+        manual: false, src: 'partner', eid: e.id, sid: '', date: e.date, time: e.time || '', timeEnd: e.timeEnd || '',
+        venueId, person: e.brand || '', keyName, note: e.name || '陪练', type: 'class'
+      });
+    });
+
     /* 排序：日期 → 时间 */
     items.sort((a, b) => {
       if ((a.date || '') !== (b.date || '')) return (a.date || '') < (b.date || '') ? -1 : 1;
@@ -1105,7 +1161,7 @@
           <div class="ri-meta">${it.venueId ? '📍 ' + esc(vmap[it.venueId] || '') : ''}${it.note ? (it.venueId ? ' · ' : '') + esc(it.note) : ''}</div>
         </div>
         <div class="ri-actions">
-          <button class="ri-done" data-act="reminder-to-lesson" data-prefill="${prefillOf(it)}">✓ 记上课</button>
+          <button class="ri-done" data-act="reminder-to-lesson" data-prefill="${prefillOf(it)}">✓ Finish</button>
           ${it.manual ? `<button class="ri-del" data-act="del-reminder" data-id="${it.id}">✕</button>` : ''}
         </div>
         <div class="ri-edit">
@@ -1126,7 +1182,7 @@
     const venueOpts = venueOptsNew('');
     const today = DB.todayStr();
     const max = addDays(today, 7);
-    openSheet('添加上课提醒', `
+    openSheet('添加提醒', `
       <div class="field"><label>日期（未来 7 天内）</label>
         <input type="date" class="input" id="rDate" min="${today}" max="${max}" value="${today}"></div>
       <div class="field-row">
@@ -1160,7 +1216,38 @@
     });
   }
 
-  /* 视频封面：直接用 <video src="blobURL#t=0.5"> 渲染第 0.5 秒的帧，由浏览器解码，稳定不黑屏 */
+  /* 视频封面：用 canvas 抽首帧当 <video poster>。
+     旧方案 <video src="blobURL#t=0.5"> 在 iOS Safari 不渲染帧（黑屏），canvas 抽帧跨平台可靠。 */
+  const _posterCache = new Map();
+  function makePoster(blobUrl, cb) {
+    if (!cb) return;
+    const v = document.createElement('video');
+    v.muted = true; v.playsInline = true; v.preload = 'auto';
+    v.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:4px;height:4px;opacity:0;pointer-events:none';
+    let done = false;
+    const finish = (p) => { if (done) return; done = true; try { document.body.removeChild(v); } catch (e) {} cb(p); };
+    v.addEventListener('loadedmetadata', () => { try { v.currentTime = Math.min(0.1, (v.duration || 1) / 2); } catch (e) {} });
+    v.addEventListener('seeked', () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = v.videoWidth || 320; c.height = v.videoHeight || 180;
+        c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+        finish(c.toDataURL('image/jpeg', 0.7));
+      } catch (e) { finish(''); }
+    });
+    v.addEventListener('error', () => finish(''));
+    setTimeout(() => finish(''), 4000);
+    document.body.appendChild(v);
+    v.src = blobUrl;
+  }
+  function applyVideoPoster(node, attId, url) {
+    const vd = node.querySelector('video');
+    if (!vd || vd.dataset.ready) return;
+    vd.dataset.ready = '1';
+    if (_posterCache.has(attId)) { const p = _posterCache.get(attId); if (p) vd.poster = p; return; }
+    makePoster(url, p => { if (p) { _posterCache.set(attId, p); vd.poster = p; } });
+  }
+
   function hydrateThumbs() {
     const s = state();
     const map = {};
@@ -1169,11 +1256,7 @@
       const att = map[node.dataset.id];
       if (!att) return;
       if (att.type === 'video') {
-        const vd = node.querySelector('video');
-        if (vd && !vd.dataset.ready) {
-          vd.dataset.ready = '1';
-          DB.mediaURL(att.id).then(u => { if (u) vd.src = u + '#t=0.5'; });
-        }
+        DB.mediaURL(att.id).then(u => { if (u) applyVideoPoster(node, att.id, u); });
       } else {
         const img = node.querySelector('img');
         if (img) DB.mediaURL(att.id).then(url => { if (url) img.src = url; });
@@ -1358,7 +1441,7 @@
             <button class="del" data-act="rm-att" data-id="${a.id}" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,.6);border-radius:50%;width:18px;height:18px;font-size:10px;color:#fff">✕</button>
           </div>`).join('') +
           pendingFiles.map((p, i) => `<div class="thumb">
-            ${p.type === 'video' ? `<div class="play">▶</div><video class="vthumb" muted playsinline preload="auto"${p.url ? ` src="${p.url}#t=0.5"` : ''}></video>` : `<img src="${p.url}" alt="">`}
+            ${p.type === 'video' ? `<div class="play">▶</div><video class="vthumb" muted playsinline preload="auto" data-purl="${p.url}"></video>` : `<img src="${p.url}" alt="">`}
             <button data-act="rm-pending" data-i="${i}" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,.6);border-radius:50%;width:18px;height:18px;font-size:10px;color:#fff">✕</button>
           </div>`).join('') +
           `<label class="thumb add">＋<input type="file" id="lFiles2" accept="image/*,video/*" multiple hidden></label>`;
@@ -1377,6 +1460,12 @@
         }));
         const f2 = box.querySelector('#lFiles2');
         if (f2) f2.addEventListener('change', () => { addFiles(f2.files); });
+        /* 待保存视频：用 canvas 首帧当预览封面（避免 iOS 黑屏） */
+        box.querySelectorAll('video[data-purl]').forEach(vd => {
+          if (vd.dataset.ready) return;
+          vd.dataset.ready = '1';
+          makePoster(vd.dataset.purl, p => { if (p) vd.poster = p; });
+        });
         hydrateIn(root);
       }
 
@@ -1387,11 +1476,7 @@
           const att = map[node.dataset.id];
           if (!att) return;
           if (att.type === 'video') {
-            const vd = node.querySelector('video');
-            if (vd && !vd.dataset.ready) {
-              vd.dataset.ready = '1';
-              DB.mediaURL(att.id).then(u => { if (u) vd.src = u + '#t=0.5'; });
-            }
+            DB.mediaURL(att.id).then(u => { if (u) applyVideoPoster(node, att.id, u); });
             return;
           }
           const img = node.querySelector('img');
@@ -1515,6 +1600,7 @@
         if (pendingReminderInfo) {
           if (pendingReminderInfo.manual && pendingReminderInfo.rid) DB.removeReminder(pendingReminderInfo.rid);
           else if (pendingReminderInfo.eid && pendingReminderInfo.sid) DB.updateSub(pendingReminderInfo.eid, pendingReminderInfo.sid, { done: true });
+          else if (pendingReminderInfo.eid) DB.updateExpense(pendingReminderInfo.eid, { done: true });
           pendingReminderInfo = null;
         }
 
@@ -1759,6 +1845,49 @@
 
   /* ---------------- 报告 ---------------- */
   let tipsFilter = '全部';
+  let typeDistFrom = '', typeDistTo = '';
+
+  const TYPE_ORDER = [['class', '上课', '#8FBF6A'], ['partner', '陪练', '#E8A05A'], ['machine', '发球机', '#6FA8DC'], ['sparring', '球搭子', '#E8C56A']];
+  /* 训练类型分布饼图（纯 SVG，按小时占比分扇区；单个 100% 时用整圆避免退化弧） */
+  function pieSvg(dist) {
+    const total = TYPE_ORDER.reduce((a, x) => a + (dist[x[0]] || 0), 0);
+    if (total <= 0) return '<div class="empty" style="padding:8px">暂无训练记录</div>';
+    const cx = 55, cy = 55, r = 48;
+    let ang = -Math.PI / 2;
+    const segs = TYPE_ORDER.map(([k, label, color]) => {
+      const val = dist[k] || 0;
+      const frac = val / total;
+      const a2 = ang + frac * 2 * Math.PI;
+      let shape;
+      if (frac > 0.9999) {
+        shape = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${color}"></circle>`;
+      } else {
+        const x1 = (cx + r * Math.cos(ang)).toFixed(2), y1 = (cy + r * Math.sin(ang)).toFixed(2);
+        const x2 = (cx + r * Math.cos(a2)).toFixed(2), y2 = (cy + r * Math.sin(a2)).toFixed(2);
+        const large = frac > 0.5 ? 1 : 0;
+        shape = `<path d="M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large} 1 ${x2},${y2} Z" fill="${color}"></path>`;
+      }
+      ang = a2;
+      return { label, color, val, shape };
+    });
+    const svg = `<svg viewBox="0 0 110 110" width="118" height="118" style="flex:0 0 auto">${segs.map(s => s.shape).join('')}</svg>`;
+    const legend = `<div class="pie-legend">${segs.map(s => `<div class="pl-row">
+      <span class="dot" style="background:${s.color}"></span>
+      <span class="pl-n">${s.label}</span>
+      <span class="pl-v">${DB.fmtHours(s.val)}</span>
+    </div>`).join('')}</div>`;
+    return `<div class="pie-wrap">${svg}${legend}</div>`;
+  }
+  /* 按日期区间聚合各类型训练时长（饼图筛选用） */
+  function typeDistributionRange(from, to) {
+    const map = { class: 0, partner: 0, machine: 0, sparring: 0 };
+    (state().lessons || []).forEach(l => {
+      if (from && l.date < from) return;
+      if (to && l.date > to) return;
+      if (map[l.type] != null) map[l.type] += Number(l.hours) || 0;
+    });
+    return map;
+  }
 
   function barRow(name, amount, pct, cls) {
     return `<div class="bar-row">
@@ -1775,6 +1904,7 @@
 
   function renderReport() {
     const s = state();
+    const today = DB.todayStr();
     const st = DB.computeStats();
     const venueStats = DB.venueStats();
     const venueMap = {}; s.venues.forEach(v => venueMap[v.id] = v.name);
@@ -1785,20 +1915,29 @@
       { k: '课程（课包+散买）', v: st.coach, cls: 'o' },
       { k: '耗材配件', v: st.consum, cls: 'b' },
       { k: '场地', v: st.venueFee, cls: '' },
+      { k: '陪练', v: st.partnerFee, cls: 'o' },
       { k: '其他', v: st.other, cls: '' }
     ].filter(c => c.v > 0);
     const totalForPct = st.total || 1;
 
-    /* 按月 */
+    /* 按月：总花费 / 实耗 / 各分类花费 / 训练次数与时长 */
     const months = {};
+    const mkInit = () => ({ expTotal: 0, expConsumed: 0, coach: 0, venue: 0, partner: 0, equipConsumOther: 0, lessons: [] });
     s.expenses.forEach(e => {
       const mk = e.dateMonth || '';
-      if (!months[mk]) months[mk] = { exp: 0, lessons: [] };
-      months[mk].exp += DB.expenseTotal(e);
+      if (!months[mk]) months[mk] = mkInit();
+      const total = DB.expenseTotal(e);
+      const consumed = DB.expenseConsumedValue(e, today);
+      months[mk].expTotal += total;
+      months[mk].expConsumed += consumed;
+      if (e.category === 'package' || e.category === 'alacarte') months[mk].coach += total;
+      else if (e.category === 'venue') months[mk].venue += total;
+      else if (e.category === 'partner') months[mk].partner += total;
+      else months[mk].equipConsumOther += total;
     });
     s.lessons.forEach(l => {
       const mk = DB.monthKey(l.date);
-      if (!months[mk]) months[mk] = { exp: 0, lessons: [] };
+      if (!months[mk]) months[mk] = mkInit();
       months[mk].lessons.push(l);
     });
     const monthKeys = Object.keys(months).filter(Boolean).sort().reverse();
@@ -1822,9 +1961,10 @@
     const costPerHour = st.totalH > 0 ? st.consumed / st.totalH : 0;
     /* 近 3 月每小时成本（U）：花费 ÷ 当月时长 */
     const monthCphRows = Object.keys(months).filter(Boolean).sort().map(mk => {
-      const m = months[mk] || { exp: 0, lessons: [] };
+      const m = months[mk] || { expTotal: 0, lessons: [] };
       const h = m.lessons.reduce((a, l) => a + (Number(l.hours) || 0), 0);
-      return { mk, h, exp: m.exp, cph: h > 0 ? m.exp / h : 0 };
+      const exp = m.expConsumed; /* 用实耗算每小时成本，与上方主卡口径一致 */
+      return { mk, h, exp, cph: h > 0 ? exp / h : 0 };
     }).slice(-3).map(o => `<div class="row-line"><span class="l">${DB.fmtMonth(o.mk)}</span><span class="r">¥${DB.fmtMoney(o.cph)}<small>/h</small></span></div>`).join('');
 
     /* 技术点偏科提醒 */
@@ -1853,14 +1993,6 @@
 
     $('#reportBody').innerHTML = `
       <div class="r-card">
-        <div class="r-title">核心指标</div>
-        <div class="kv-grid">
-          <div class="kv"><div class="k">技术等级（自评）</div><div class="v">${esc(tech)}</div></div>
-          <div class="kv"><div class="k">累计网球时长</div><div class="v">${DB.fmtHours(st.totalH)}</div></div>
-        </div>
-      </div>
-
-      <div class="r-card">
         <div class="r-grid4">
           <div class="kv mini"><div class="k">总花费</div><div class="v">¥${DB.fmtMoney(st.total)}</div></div>
           <div class="kv mini"><div class="k">课包剩余</div><div class="v">${st.remaining}<small>节</small></div></div>
@@ -1872,11 +2004,14 @@
       </div>
 
       <div class="r-card">
-        <div class="r-title">训练类型分布 <span class="tag">累计 ${DB.fmtHours(totalTypeH)}</span></div>
-        ${typeOrder.map(([k, label, cls]) => {
-          const h = typeDist[k] || 0;
-          return barRowVal(label, DB.fmtHours(h), Math.round(h / totalTypeH * 100), cls);
-        }).join('') || '<div class="empty">暂无训练记录</div>'}
+        <div class="r-title">训练类型分布 <span class="tag">累计 ${DB.fmtHours(totalTypeH)}</span>
+          <span class="td-filter">
+            <input type="date" class="td-input" id="tdFrom" value="${typeDistFrom}" placeholder="起"> ~
+            <input type="date" class="td-input" id="tdTo" value="${typeDistTo}" placeholder="止">
+            <button class="mini-btn" id="tdReset">全部</button>
+          </span>
+        </div>
+        ${pieSvg(typeDistributionRange(typeDistFrom, typeDistTo))}
       </div>
 
       <div class="r-card">
@@ -1903,13 +2038,25 @@
         <div class="r-title">按月 <span class="tag">${monthKeys.length} 个月</span></div>
         ${monthKeys.map(mk => {
           const m = months[mk];
-          const h = m.lessons.reduce((a, l) => a + (Number(l.hours) || 0), 0);
+          const th = { class: 0, partner: 0, machine: 0, sparring: 0 };
+          const coachMap = {};
+          m.lessons.forEach(l => {
+            if (th[l.type] != null) th[l.type] += Number(l.hours) || 0;
+            const p = l.person || '未署名';
+            coachMap[p] = (coachMap[p] || 0) + 1;
+          });
+          const totalH = th.class + th.partner + th.machine + th.sparring;
+          const coachStr = Object.entries(coachMap).map(([p, c]) => `${esc(p)} ${c}`).join(' · ');
+          const typeStr = `上课 ${DB.fmtHours(th.class)} · 陪练 ${DB.fmtHours(th.partner)} · 发球机 ${DB.fmtHours(th.machine)} · 球搭子 ${DB.fmtHours(th.sparring)}`;
           return `<div class="month-group">
-            <div class="month-head"><b>${DB.fmtMonth(mk)}</b><span>练习 ${DB.fmtHours(h)}</span><span class="sum">¥${DB.fmtMoney(m.exp)}</span></div>
-            ${m.lessons.length ? m.lessons.sort((a, b) => (a.date || '') < (b.date || '') ? 1 : -1).map(l => `<div class="row-line">
-              <span class="l">${DB.fmtDateShort(l.date)} · ${esc(l.person || (DB.LESSON_TYPES[l.type] || {}).label || '训练')}</span>
-              <span class="r">${DB.fmtHours(l.hours)}</span>
-            </div>`).join('') : ''}
+            <div class="month-head"><b>${DB.fmtMonth(mk)}</b></div>
+            <div class="month-stats">
+              <div class="ms-row"><span class="ms-k">总花费</span><span class="ms-v">¥${DB.fmtMoney(m.expTotal)}</span><span class="ms-k">实耗</span><span class="ms-v">¥${DB.fmtMoney(m.expConsumed)}</span></div>
+              <div class="ms-row"><span class="ms-k">课程</span><span class="ms-v">¥${DB.fmtMoney(m.coach)}</span><span class="ms-k">场地</span><span class="ms-v">¥${DB.fmtMoney(m.venue)}</span><span class="ms-k">陪练</span><span class="ms-v">¥${DB.fmtMoney(m.partner)}</span></div>
+              <div class="ms-row"><span class="ms-k">装备/耗材/其他</span><span class="ms-v">¥${DB.fmtMoney(m.equipConsumOther)}</span></div>
+              <div class="ms-row"><span class="ms-k">训练</span><span class="ms-v">${m.lessons.length} 次${coachStr ? '（' + coachStr + '）' : ''}</span></div>
+              <div class="ms-row"><span class="ms-k">时长</span><span class="ms-v">${DB.fmtHours(totalH)}（${typeStr}）</span></div>
+            </div>
           </div>`;
         }).join('') || '<div class="empty">暂无记录</div>'}
       </div>
@@ -1988,6 +2135,14 @@
         </div>
       </div>
       <div style="height:6px"></div>`;
+
+    /* 训练类型分布饼图：日期区间筛选（只影响该卡片，改动后整卡重渲染） */
+    const tdFrom = document.getElementById('tdFrom');
+    const tdTo = document.getElementById('tdTo');
+    const tdReset = document.getElementById('tdReset');
+    if (tdFrom) tdFrom.addEventListener('change', () => { typeDistFrom = tdFrom.value; renderReport(); });
+    if (tdTo) tdTo.addEventListener('change', () => { typeDistTo = tdTo.value; renderReport(); });
+    if (tdReset) tdReset.addEventListener('click', () => { typeDistFrom = ''; typeDistTo = ''; renderReport(); });
   }
 
   /* ---------------- 设置 ---------------- */
@@ -2110,10 +2265,16 @@
 
       await DB.replaceState(data);
 
+      /* 还原媒体时带上 MIME：附件元数据里记录了每个 id 的原始类型，
+         否则新 Blob 的 type 为空，iOS Safari 会因无法识别容器而拒绝播放视频 */
+      const mimeMap = {};
+      (data.lessons || []).forEach(l => (l.attachments || []).forEach(a => { if (a.id && a.mime) mimeMap[a.id] = a.mime; }));
+      (data.venues || []).forEach(v => (v.photos || []).forEach(p => { if (p.id && p.mime) mimeMap[p.id] = p.mime; }));
+
       for (const e of mediaEntries) {
         const base = e.name.slice('media/'.length);
         const id = base.replace(/\.[^.]+$/, '');
-        const blob = new Blob([e.data]);
+        const blob = new Blob([e.data], { type: mimeMap[id] || '' });
         await DB.media.put(id, blob);
       }
 
@@ -2334,6 +2495,9 @@
           } else if (eid && sid) {
             /* 派生提醒：日期来自记账，这里只允许改时间区间 */
             DB.updateSub(eid, sid, { time, timeEnd });
+          } else if (eid) {
+            /* 单笔场地 / 陪练：日期来自记账（锁定），只允许改时间区间 */
+            DB.updateExpense(eid, { time, timeEnd });
           }
           refresh(); toast('已更新上课时间');
           return;
