@@ -515,6 +515,15 @@ ul{margin:0;padding:0;list-style:none;}
 .tab.is-active span{filter:none;transform:translateY(-1px);}
 .tab:active{background:rgba(242,237,225,.05);}
 
+.app-footer{
+  text-align:center;
+  font-size:10.5px;
+  color:var(--dim);
+  opacity:.7;
+  padding:14px 12px calc(14px + env(safe-area-inset-bottom));
+  letter-spacing:.2px;
+}
+
 /* ===== 底部弹窗 ===== */
 .sheet-backdrop{
   position:fixed;inset:0;z-index:50;
