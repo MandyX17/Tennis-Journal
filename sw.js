@@ -1,14 +1,15 @@
 /* 🦀的网球手账 · Service Worker */
-const CACHE = 'crab-tennis-v16';
+const CACHE = 'crab-tennis-v18';
 const ASSETS = [
   './',
   './index.html',
   './css/style.css',
   './css/lock.css',
-  './js/data.js',
-  './js/zip.js',
-  './js/app.js',
-  './js/lock.js',
+  './js/data.min.js',
+  './js/zip.min.js',
+  './js/app.min.js',
+  './js/lock.min.js',
+  './js/i18n.min.js',
   './manifest.json',
   './icons/icon-180.png',
   './icons/icon-192.png',
