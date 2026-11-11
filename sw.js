@@ -1,5 +1,5 @@
 /* 🦀的网球手账 · Service Worker */
-const CACHE = 'crab-tennis-v18';
+const CACHE = 'crab-tennis-v19';
 const ASSETS = [
   './',
   './index.html',
@@ -18,11 +18,12 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
+  // 无论预缓存成功与否，都强制跳过等待、立即接管，避免旧 SW 长期滞留导致白屏
+  self.skipWaiting();
   e.waitUntil(
     caches.open(CACHE)
       .then((c) => c.addAll(ASSETS))
-      .then(() => self.skipWaiting())
-      .catch((err) => console.warn('SW precache failed', err))
+      .catch((err) => console.warn('SW precache partial', err))
   );
 });
 
