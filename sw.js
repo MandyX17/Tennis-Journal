@@ -43,6 +43,9 @@ self.addEventListener('fetch', (e) => {
   try { url = new URL(req.url); } catch (err) { return; }
   if (url.origin !== location.origin) return;
 
+  // Netlify Functions（如访问计数接口）：绕过 SW、不缓存，保证实时返回最新值
+  if (url.pathname.startsWith('/.netlify/')) return;
+
   // 导航请求：优先网络，失败回落缓存
   if (req.mode === 'navigate') {
     e.respondWith(
