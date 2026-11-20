@@ -1,5 +1,5 @@
 /* 🦀的网球手账 · Service Worker */
-const CACHE = 'crab-tennis-v19';
+const CACHE = 'crab-tennis-v20';
 const ASSETS = [
   './',
   './index.html',
